@@ -1,17 +1,20 @@
-# the_radical
+# 🚩 The Radical | News Dashboard
 
-A new Flutter project.
+A news aggregator designed to centralise reporting from Australian political and social perspectives. 
 
-## Getting Started
+## ⚡ Features
+- **Real-time Aggregation:** Fetches live signals from over 12 independent sources.
+- **Topic Filtering:** Instantly sort by Labour, Middle East, Climate, and more.
+- **Custom Themes:** Multiple UI palettes including Amber, Rose, and Emerald.
+- **Built with Flutter:** High-performance web interface designed for rapid information scanning.
 
-This project is a starting point for a Flutter application.
+## 🛠 Built With
+- [Flutter](https://flutter.dev) - UI Framework
+- [RSS2JSON](https://rss2json.com/) - API for feed conversion
+- [Google Fonts](https://fonts.google.com/) - Space Grotesk & Manrope
 
-A few resources to get you started if this is your first Flutter project:
+## 📖 About the Project
+The Radical is designed for tracking material and economic realities without having to manually check dozens of sources every day. It focuses on labor movements, internationalism, and anti-fascist reporting.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+*This website is currently in Beta.*
