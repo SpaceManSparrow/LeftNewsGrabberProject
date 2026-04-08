@@ -1,0 +1,49 @@
+name: radical_news
+description: "The Radical | News Dashboard - Flutter Web News Aggregator"
+
+# The following line prevents the package from being accidentally published to pub.dev.
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.2
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.6
+
+  # Networking for fetching the RSS feeds
+  http: ^1.1.0
+
+  # Typography to match Space Grotesk and Manrope
+  google_fonts: ^6.1.0
+
+  # Opening news articles in a new browser tab
+  url_launcher: ^6.2.0
+
+  # Icons to match the FontAwesome library used in the original site
+  font_awesome_flutter: ^10.6.0
+
+  # Date and time formatting
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "lints" package contains a set of recommended lints for Flutter.
+  flutter_lints: ^3.0.0
+
+flutter:
+  # The system font will be overridden by Google Fonts in main.dart
+  uses-material-design: true
+
+  # If you decide to add local brand assets (logos), uncomment the lines below:
+  # assets:
+  #   - assets/images/
