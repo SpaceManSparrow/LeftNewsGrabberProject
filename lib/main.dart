@@ -1,20 +1,18 @@
-import 'dart:convert'; // Required for turning raw data from the internet into JSON
-import 'package:flutter/material.dart'; // The primary UI toolkit for Flutter
-import 'package:http/http.dart' as http; // For making web requests to the news feeds
-import 'package:google_fonts/google_fonts.dart'; // For professional typography (Space Grotesk / Manrope)
-import 'package:url_launcher/url_launcher.dart'; // To open news links in a new browser tab
-import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // For specialized icons like the sliders
-import 'package:intl/intl.dart'; // For formatting the "Refreshed at" time
-import 'package:shared_preferences/shared_preferences.dart'; // For remembering settings in the browser
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 1. ENTRY POINT
-/// This starts the entire application.
 void main() {
   runApp(const TheRadicalApp());
 }
 
 /// 2. THE ROOT WIDGET
-/// This handles the high-level setup: The Theme and the Max-Width Centering.
 class TheRadicalApp extends StatefulWidget {
   const TheRadicalApp({super.key});
 
@@ -23,33 +21,36 @@ class TheRadicalApp extends StatefulWidget {
 }
 
 class _TheRadicalAppState extends State<TheRadicalApp> {
-  // We store the primary color in a variable. Default is Amber.
+  // We keep the theme color here at the top level
   Color primaryColor = const Color(0xFFf59e0b);
 
   @override
   void initState() {
     super.initState();
-    _loadSavedTheme(); // Check browser memory as soon as the app starts
+    _loadSavedTheme(); // Load saved color from browser memory
   }
 
-  /// MEMORY: Load the saved color from browser LocalStorage
+  /// MEMORY: Check browser for saved color
   Future<void> _loadSavedTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int? colorValue = prefs.getInt('theme_color');
-    if (colorValue != null) {
-      setState(() {
-        primaryColor = Color(colorValue);
-      });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final int? colorValue = prefs.getInt('theme_color');
+      if (colorValue != null) {
+        setState(() {
+          primaryColor = Color(colorValue);
+        });
+      }
+    } catch (e) {
+      debugPrint("Memory error: $e"); // If browser blocks memory, app still runs
     }
   }
 
-  /// MEMORY: Save the color when it is changed in settings
+  /// MEMORY: Save color when changed
   void updateTheme(Color newColor) async {
     setState(() {
       primaryColor = newColor;
     });
     final prefs = await SharedPreferences.getInstance();
-    // 'toARGB32' is the modern way to turn a color into a storable number
     await prefs.setInt('theme_color', newColor.toARGB32());
   }
 
@@ -57,24 +58,20 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'The Radical | News Dashboard',
-      debugShowCheckedModeBanner: false, // Hides the "Debug" banner
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF0e0e0e),
         primaryColor: primaryColor,
-        // Set Manrope as the default body font
         textTheme: GoogleFonts.manropeTextTheme(ThemeData.dark().textTheme),
       ),
+      // Here we implement the Max-Width and Centering
       home: Scaffold(
-        // Pure black for the background area outside the 1800px container
-        backgroundColor: const Color(0xFF000000), 
+        backgroundColor: const Color(0xFF000000), // Background for wide screens
         body: Center(
           child: Container(
-            // MAX WIDTH: Limits the site width to 1800px on ultra-wide screens
-            constraints: const BoxConstraints(maxWidth: 1800),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0e0e0e), // The actual dashboard background
-            ),
+            constraints: const BoxConstraints(maxWidth: 1800), // Max Width Limit
+            decoration: const BoxDecoration(color: Color(0xFF0e0e0e)),
             child: NewsDashboard(
               primaryColor: primaryColor,
               onThemeChanged: updateTheme,
@@ -86,8 +83,7 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
   }
 }
 
-/// 3. THE ARTICLE DATA BLUEPRINT
-/// This class acts as a template for what an Article contains.
+/// 3. ARTICLE DATA MODEL
 class Article {
   final String title;
   final String link;
@@ -107,13 +103,11 @@ class Article {
     required this.topics,
   });
 
-  // This converts raw JSON (Map) into a structured Article object
   factory Article.fromJson(Map<String, dynamic> json, String sourceName, List<String> detectedTopics) {
     return Article(
       title: json['title'] ?? '',
       link: json['link'] ?? '',
       pubDate: json['pubDate'] ?? '',
-      // Removes HTML tags (like <b>) from the text summary
       description: (json['description'] as String).replaceAll(RegExp(r'<[^>]*>'), ''),
       source: sourceName,
       thumbnail: json['thumbnail'] ?? '',
@@ -122,8 +116,7 @@ class Article {
   }
 }
 
-/// 4. SOURCE CONFIGURATION
-/// Lists of where to find the news.
+/// 4. SOURCE CONFIGURATIONS
 const Map<String, String> coreSources = {
   "https://ancomfed.org/picket-line/feed": "PICKET LINE",
   "https://www.greenleft.org.au/rss.xml": "GREEN LEFT",
@@ -145,7 +138,6 @@ const Map<String, String> extendedSources = {
   "https://independentaustralia.net/rss.xml": "INDEPENDENT AUSTRALIA",
 };
 
-// Automatic categorization keywords
 const Map<String, List<String>> topicConfig = {
   "Labour": ["strike", "union", "worker", "picket", "wage", "industrial", "cfmeu", "workplace", "unemployment", "labour", "fair work"],
   "Middle East": ["gaza", "palestine", "israel", "occupation", "zionism", "rafah", "genocide", "iran", "tehran", "lebanon", "beirut", "yemen", "houthi"],
@@ -168,61 +160,73 @@ class NewsDashboard extends StatefulWidget {
 class _NewsDashboardState extends State<NewsDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
-  List<Article> masterArticles = []; // Every article fetched
-  List<Article> filteredArticles = []; // Articles currently shown (Search/Filter)
-  bool isLoading = true; // Shows spinner while loading
-  bool isExtendedCoverageEnabled = false; // Toggle for IA/Michael West
-  String currentFilter = "ALL"; // Current topic selected
-  final TextEditingController _searchController = TextEditingController(); // Search box input
+  List<Article> masterArticles = [];
+  List<Article> filteredArticles = [];
+  bool isLoading = true;
+  bool isExtendedCoverageEnabled = false;
+  String currentFilter = "ALL";
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _startApp();
   }
 
-  /// STARTUP: Load settings first, then fetch articles
-  Future<void> _initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      isExtendedCoverageEnabled = prefs.getBool('extended_coverage') ?? false;
-    });
+  /// STARTUP SEQUENCE: Fetch news immediately, load memory settings in background
+  void _startApp() async {
+    // 1. Fetch news immediately (Standard working logic)
     loadNews();
+    
+    // 2. Load IA/Michael West toggle setting from memory afterward
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      bool savedToggle = prefs.getBool('extended_coverage') ?? false;
+      if (savedToggle != isExtendedCoverageEnabled) {
+        setState(() {
+          isExtendedCoverageEnabled = savedToggle;
+          isLoading = true;
+        });
+        loadNews(); // Refresh news if toggle was meant to be ON
+      }
+    } catch (e) {
+      debugPrint("Memory toggle error: $e");
+    }
   }
 
-  /// MEMORY: Save toggle status when clicked
+  /// MEMORY: Save the Extended News toggle
   Future<void> _toggleExtendedCoverage(bool val) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('extended_coverage', val);
     setState(() {
       isExtendedCoverageEnabled = val;
-      isLoading = true; 
+      isLoading = true;
     });
     loadNews();
   }
 
-  /// STABLE NEWS LOADER: This version uses a stable sequential loop with a timeout.
+  /// STABLE NEWS LOADER (Matches the logic that worked in your original code)
   Future<void> loadNews() async {
     List<Article> allFetched = [];
     
-    // Choose sources based on the toggle
+    // Determine which sources to loop through
     Map<String, String> activeSources = Map.from(coreSources);
     if (isExtendedCoverageEnabled) {
       activeSources.addAll(extendedSources);
     }
 
-    // Loop through sources. This is more stable for Web than Parallel fetching.
+    // THE LOOP: Fetches one by one (The most stable way to avoid browser blocking)
     for (var entry in activeSources.entries) {
       try {
         final response = await http.get(Uri.parse(
             'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(entry.key)}'
-        )).timeout(const Duration(seconds: 10)); // 10 second timeout per site
+        ));
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           if (data['status'] == 'ok') {
             for (var item in data['items']) {
-              // Tag articles with topics based on content
+              // Tag topics based on words found in title/summary
               String content = (item['title'] + (item['description'] ?? "")).toLowerCase();
               List<String> topics = [];
               topicConfig.forEach((key, keywords) {
@@ -234,24 +238,24 @@ class _NewsDashboardState extends State<NewsDashboard> {
           }
         }
       } catch (e) {
-        debugPrint("Error loading ${entry.value}: $e");
+        debugPrint("Error fetching ${entry.value}: $e");
       }
     }
 
-    // Sort: Newest at the top
+    // Sort by newest date
     allFetched.sort((a, b) => b.pubDate.compareTo(a.pubDate));
 
     if (mounted) {
       setState(() {
         masterArticles = allFetched;
         filteredArticles = allFetched;
-        isLoading = false; 
+        isLoading = false;
         applyFilter(currentFilter);
       });
     }
   }
 
-  /// SEARCH & FILTER LOGIC
+  /// SEARCH & FILTER
   void applyFilter(String topic) {
     setState(() {
       currentFilter = topic;
@@ -267,8 +271,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     setState(() {
       filteredArticles = masterArticles.where((a) {
         final q = query.toLowerCase();
-        return a.title.toLowerCase().contains(q) ||
-               a.source.toLowerCase().contains(q);
+        return a.title.toLowerCase().contains(q) || a.source.toLowerCase().contains(q);
       }).toList();
     });
   }
@@ -296,14 +299,16 @@ class _NewsDashboardState extends State<NewsDashboard> {
           _buildBetaBanner(),
           _buildHeader(screenWidth),
           Expanded(
-            child: isLoading ? _buildLoader() : _buildContent(screenWidth, crossAxisCount),
+            child: isLoading 
+              ? _buildLoader() 
+              : (masterArticles.isEmpty ? _buildEmptyState() : _buildContent(screenWidth, crossAxisCount)),
           ),
         ],
       ),
     );
   }
 
-  /// UI: Gold Beta Banner
+  /// UI: Gold Top Banner
   Widget _buildBetaBanner() {
     return Container(
       width: double.infinity,
@@ -317,7 +322,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Responsive Header
+  /// UI: Navigation Header
   Widget _buildHeader(double screenWidth) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -354,7 +359,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
             ),
           ),
           const SizedBox(width: 20),
-          // MODIFIED: Settings button hides text on smaller screens
           ElevatedButton(
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             style: ElevatedButton.styleFrom(
@@ -380,7 +384,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: The Spinner
+  /// UI: Loading Screen
   Widget _buildLoader() {
     return Center(
       child: Column(
@@ -394,7 +398,23 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: The Main Content (Hero + Grid)
+  /// UI: Nothing found screen
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(FontAwesomeIcons.circleExclamation, size: 40, color: Colors.white24),
+          const SizedBox(height: 20),
+          const Text("NO ARTICLES FOUND", style: TextStyle(letterSpacing: 2, color: Colors.white54)),
+          const SizedBox(height: 10),
+          TextButton(onPressed: loadNews, child: Text("RETRY", style: TextStyle(color: widget.primaryColor)))
+        ],
+      ),
+    );
+  }
+
+  /// UI: The actual news layout
   Widget _buildContent(double screenWidth, int crossAxisCount) {
     return CustomScrollView(
       slivers: [
@@ -444,7 +464,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Headline Feature Card
   Widget _buildHero(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
@@ -479,7 +498,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Standard News Card
   Widget _buildArticleCard(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
@@ -509,7 +527,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Settings Drawer
+  /// UI: Sidebar Settings Drawer
   Widget _buildSidebar() {
     return Drawer(
       backgroundColor: const Color(0xFF131313),
@@ -541,7 +559,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Michael West / IA Toggle
   Widget _buildExtendedToggle() {
     return Container(
       padding: const EdgeInsets.all(16),
