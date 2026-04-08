@@ -1,21 +1,20 @@
-import 'dart:convert'; // For turning raw text into JSON data
-import 'package:flutter/material.dart'; // The primary UI library for Flutter
-import 'package:http/http.dart' as http; // For making web requests to news sites
-import 'package:google_fonts/google_fonts.dart'; // For professional typography
-import 'package:url_launcher/url_launcher.dart'; // To open links in your browser
-import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // For specialized icons
-import 'package:intl/intl.dart'; // For formatting the clock/dates
-import 'package:shared_preferences/shared_preferences.dart'; // For browser "memory"
+import 'dart:convert'; // Required for turning raw data from the internet into JSON
+import 'package:flutter/material.dart'; // The primary UI toolkit for Flutter
+import 'package:http/http.dart' as http; // For making web requests to the news feeds
+import 'package:google_fonts/google_fonts.dart'; // For professional typography (Space Grotesk / Manrope)
+import 'package:url_launcher/url_launcher.dart'; // To open news links in a new browser tab
+import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // For specialized icons like the sliders
+import 'package:intl/intl.dart'; // For formatting the "Refreshed at" time
+import 'package:shared_preferences/shared_preferences.dart'; // For remembering settings in the browser
 
 /// 1. ENTRY POINT
-/// Every Flutter app starts here. 'runApp' tells the computer which widget to show first.
+/// This starts the entire application.
 void main() {
   runApp(const TheRadicalApp());
 }
 
 /// 2. THE ROOT WIDGET
-/// This is the "Shell" of your app. It defines the theme (colors/fonts)
-/// and the 1800px max-width boundary.
+/// This handles the high-level setup: The Theme and the Max-Width Centering.
 class TheRadicalApp extends StatefulWidget {
   const TheRadicalApp({super.key});
 
@@ -24,34 +23,33 @@ class TheRadicalApp extends StatefulWidget {
 }
 
 class _TheRadicalAppState extends State<TheRadicalApp> {
-  // We store the primary color in a variable so it can be changed later.
+  // We store the primary color in a variable. Default is Amber.
   Color primaryColor = const Color(0xFFf59e0b);
 
   @override
   void initState() {
     super.initState();
-    _loadSavedTheme(); // Check browser storage for a saved color immediately.
+    _loadSavedTheme(); // Check browser memory as soon as the app starts
   }
 
-  /// MEMORY: Load saved theme color from LocalStorage
+  /// MEMORY: Load the saved color from browser LocalStorage
   Future<void> _loadSavedTheme() async {
     final prefs = await SharedPreferences.getInstance();
     final int? colorValue = prefs.getInt('theme_color');
     if (colorValue != null) {
       setState(() {
-        // Change the variable and tell Flutter to redraw the screen.
         primaryColor = Color(colorValue);
       });
     }
   }
 
-  /// MEMORY: Save the color so it persists after a page refresh
+  /// MEMORY: Save the color when it is changed in settings
   void updateTheme(Color newColor) async {
     setState(() {
       primaryColor = newColor;
     });
     final prefs = await SharedPreferences.getInstance();
-    // 'toARGB32' converts the color into a number format that memory can store.
+    // 'toARGB32' is the modern way to turn a color into a storable number
     await prefs.setInt('theme_color', newColor.toARGB32());
   }
 
@@ -59,22 +57,24 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'The Radical | News Dashboard',
-      debugShowCheckedModeBanner: false, // Removes the red "Debug" ribbon
+      debugShowCheckedModeBanner: false, // Hides the "Debug" banner
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF0e0e0e),
         primaryColor: primaryColor,
-        // Set Manrope as the default font for the whole app
+        // Set Manrope as the default body font
         textTheme: GoogleFonts.manropeTextTheme(ThemeData.dark().textTheme),
       ),
       home: Scaffold(
-        // The background color for the 'empty space' on screens wider than 1800px
-        backgroundColor: const Color(0xFF000000),
+        // Pure black for the background area outside the 1800px container
+        backgroundColor: const Color(0xFF000000), 
         body: Center(
           child: Container(
-            // MAX WIDTH: This ensures the website doesn't stretch forever on big monitors
+            // MAX WIDTH: Limits the site width to 1800px on ultra-wide screens
             constraints: const BoxConstraints(maxWidth: 1800),
-            decoration: const BoxDecoration(color: Color(0xFF0e0e0e)),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0e0e0e), // The actual dashboard background
+            ),
             child: NewsDashboard(
               primaryColor: primaryColor,
               onThemeChanged: updateTheme,
@@ -86,8 +86,8 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
   }
 }
 
-/// 3. THE DATA BLUEPRINT (MODEL)
-/// This defines what an "Article" looks like.
+/// 3. THE ARTICLE DATA BLUEPRINT
+/// This class acts as a template for what an Article contains.
 class Article {
   final String title;
   final String link;
@@ -107,13 +107,13 @@ class Article {
     required this.topics,
   });
 
-  // A factory helps build this 'blueprint' from raw JSON data.
+  // This converts raw JSON (Map) into a structured Article object
   factory Article.fromJson(Map<String, dynamic> json, String sourceName, List<String> detectedTopics) {
     return Article(
       title: json['title'] ?? '',
       link: json['link'] ?? '',
       pubDate: json['pubDate'] ?? '',
-      // Removes HTML tags (like <p>) from the description text
+      // Removes HTML tags (like <b>) from the text summary
       description: (json['description'] as String).replaceAll(RegExp(r'<[^>]*>'), ''),
       source: sourceName,
       thumbnail: json['thumbnail'] ?? '',
@@ -122,8 +122,8 @@ class Article {
   }
 }
 
-/// 4. CONSTANTS (NEWS SOURCES & TAGS)
-/// These are hardcoded lists of where we get our news.
+/// 4. SOURCE CONFIGURATION
+/// Lists of where to find the news.
 const Map<String, String> coreSources = {
   "https://ancomfed.org/picket-line/feed": "PICKET LINE",
   "https://www.greenleft.org.au/rss.xml": "GREEN LEFT",
@@ -145,7 +145,7 @@ const Map<String, String> extendedSources = {
   "https://independentaustralia.net/rss.xml": "INDEPENDENT AUSTRALIA",
 };
 
-// Automatic categorization based on words in the title/summary
+// Automatic categorization keywords
 const Map<String, List<String>> topicConfig = {
   "Labour": ["strike", "union", "worker", "picket", "wage", "industrial", "cfmeu", "workplace", "unemployment", "labour", "fair work"],
   "Middle East": ["gaza", "palestine", "israel", "occupation", "zionism", "rafah", "genocide", "iran", "tehran", "lebanon", "beirut", "yemen", "houthi"],
@@ -154,8 +154,7 @@ const Map<String, List<String>> topicConfig = {
   "Anti-Fascism": ["fascism", "far-right", "nazi", "racism", "protest", "police", "surveillance"]
 };
 
-/// 5. MAIN DASHBOARD WIDGET
-/// This is the logic center. It handles loading data, searching, and filtering.
+/// 5. MAIN DASHBOARD LOGIC
 class NewsDashboard extends StatefulWidget {
   final Color primaryColor;
   final Function(Color) onThemeChanged;
@@ -167,24 +166,23 @@ class NewsDashboard extends StatefulWidget {
 }
 
 class _NewsDashboardState extends State<NewsDashboard> {
-  // GlobalKey allows us to control the Scaffold (like opening the Sidebar)
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
-  List<Article> masterArticles = []; // The complete list of news
-  List<Article> filteredArticles = []; // The list currently visible on screen
-  bool isLoading = true; // Tracks if we are still downloading
-  bool isExtendedCoverageEnabled = false; // Tracks the IA/Michael West toggle
-  String currentFilter = "ALL"; // Tracks which topic tab is selected
-  final TextEditingController _searchController = TextEditingController(); // Controls the search bar
+  
+  List<Article> masterArticles = []; // Every article fetched
+  List<Article> filteredArticles = []; // Articles currently shown (Search/Filter)
+  bool isLoading = true; // Shows spinner while loading
+  bool isExtendedCoverageEnabled = false; // Toggle for IA/Michael West
+  String currentFilter = "ALL"; // Current topic selected
+  final TextEditingController _searchController = TextEditingController(); // Search box input
 
   @override
   void initState() {
     super.initState();
-    _loadSettingsAndNews(); // 1. Load toggle status, 2. Load news
+    _initialize();
   }
 
-  /// MEMORY: Load saved toggle preference
-  Future<void> _loadSettingsAndNews() async {
+  /// STARTUP: Load settings first, then fetch articles
+  Future<void> _initialize() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       isExtendedCoverageEnabled = prefs.getBool('extended_coverage') ?? false;
@@ -192,73 +190,68 @@ class _NewsDashboardState extends State<NewsDashboard> {
     loadNews();
   }
 
-  /// MEMORY: Save toggle preference and refresh list
+  /// MEMORY: Save toggle status when clicked
   Future<void> _toggleExtendedCoverage(bool val) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('extended_coverage', val);
     setState(() {
       isExtendedCoverageEnabled = val;
-      isLoading = true; // Show loading screen while we update the list
+      isLoading = true; 
     });
     loadNews();
   }
 
-  /// INTERNET: Fetch data from news sites
+  /// STABLE NEWS LOADER: This version uses a stable sequential loop with a timeout.
   Future<void> loadNews() async {
     List<Article> allFetched = [];
-
-    // Create the final list of URLs to visit
+    
+    // Choose sources based on the toggle
     Map<String, String> activeSources = Map.from(coreSources);
     if (isExtendedCoverageEnabled) {
       activeSources.addAll(extendedSources);
     }
 
-    // PARALLEL LOADING: We start all requests at the same time for speed
-    final List<Future<void>> tasks = activeSources.entries.map((entry) async {
+    // Loop through sources. This is more stable for Web than Parallel fetching.
+    for (var entry in activeSources.entries) {
       try {
-        // TIMEOUT: If a site doesn't answer in 10 seconds, skip it.
         final response = await http.get(Uri.parse(
-          'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(entry.key)}'
-        )).timeout(const Duration(seconds: 10));
+            'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(entry.key)}'
+        )).timeout(const Duration(seconds: 10)); // 10 second timeout per site
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           if (data['status'] == 'ok') {
             for (var item in data['items']) {
-              // Categorize the article based on keywords
+              // Tag articles with topics based on content
               String content = (item['title'] + (item['description'] ?? "")).toLowerCase();
               List<String> topics = [];
               topicConfig.forEach((key, keywords) {
                 if (keywords.any((kw) => content.contains(kw))) topics.add(key);
               });
-
-                // Add to our temporary list
-                allFetched.add(Article.fromJson(item, entry.value, topics));
+              
+              allFetched.add(Article.fromJson(item, entry.value, topics));
             }
           }
         }
       } catch (e) {
-        debugPrint("Skipping ${entry.value} due to error: $e");
+        debugPrint("Error loading ${entry.value}: $e");
       }
-    }).toList();
+    }
 
-    // Wait for all the individual site tasks to finish
-    await Future.wait(tasks);
-
-    // Sort by newest date
+    // Sort: Newest at the top
     allFetched.sort((a, b) => b.pubDate.compareTo(a.pubDate));
 
     if (mounted) {
       setState(() {
         masterArticles = allFetched;
         filteredArticles = allFetched;
-        isLoading = false; // FINALLY stop the "Fetching Articles" screen
-        applyFilter(currentFilter); // Re-apply current topic filter
+        isLoading = false; 
+        applyFilter(currentFilter);
       });
     }
   }
 
-  /// LOGIC: Filter list by topic (Labour, Climate, etc)
+  /// SEARCH & FILTER LOGIC
   void applyFilter(String topic) {
     setState(() {
       currentFilter = topic;
@@ -270,19 +263,16 @@ class _NewsDashboardState extends State<NewsDashboard> {
     });
   }
 
-  /// LOGIC: Search list by typing
   void handleSearch(String query) {
     setState(() {
       filteredArticles = masterArticles.where((a) {
         final q = query.toLowerCase();
         return a.title.toLowerCase().contains(q) ||
-        a.description.toLowerCase().contains(q) ||
-        a.source.toLowerCase().contains(q);
+               a.source.toLowerCase().contains(q);
       }).toList();
     });
   }
 
-  /// LOGIC: Convert complex date into "3h ago"
   String timeAgo(String dateStr) {
     try {
       DateTime d = DateTime.parse(dateStr);
@@ -290,37 +280,30 @@ class _NewsDashboardState extends State<NewsDashboard> {
       if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
       if (diff.inHours < 24) return "${diff.inHours}h ago";
       return "${diff.inDays}d ago";
-    } catch (e) {
-      return dateStr;
-    }
+    } catch (e) { return "Recent"; }
   }
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
-    // Calculate columns: 3 for desktop, 2 for tablet, 1 for phone
     int crossAxisCount = screenWidth > 1200 ? 3 : (screenWidth > 800 ? 2 : 1);
 
     return Scaffold(
-      key: _scaffoldKey, // Linked to Sidebar drawer control
-      endDrawer: _buildSidebar(), // The hidden settings menu
+      key: _scaffoldKey,
+      endDrawer: _buildSidebar(),
       body: Column(
         children: [
           _buildBetaBanner(),
           _buildHeader(screenWidth),
           Expanded(
-            child: isLoading
-            ? _buildLoader()
-            : (masterArticles.isEmpty
-            ? _buildEmptyState()
-            : _buildContent(screenWidth, crossAxisCount)),
+            child: isLoading ? _buildLoader() : _buildContent(screenWidth, crossAxisCount),
           ),
         ],
       ),
     );
   }
 
-  /// UI: Gold banner at the very top
+  /// UI: Gold Beta Banner
   Widget _buildBetaBanner() {
     return Container(
       width: double.infinity,
@@ -334,12 +317,12 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Logo, Search Bar, and Settings Button
+  /// UI: Responsive Header
   Widget _buildHeader(double screenWidth) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0e0e0e).withAlpha(204), // Glass effect
+        color: const Color(0xFF0e0e0e).withAlpha(204),
         border: const Border(bottom: BorderSide(color: Colors.white10)),
       ),
       child: Row(
@@ -348,12 +331,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
             onTap: () => applyFilter("ALL"),
             child: Text(
               screenWidth > 500 ? "THE RADICAL" : "TR",
-              style: GoogleFonts.spaceGrotesk(
-                color: widget.primaryColor,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -1,
-              ),
+              style: GoogleFonts.spaceGrotesk(color: widget.primaryColor, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: -1),
             ),
           ),
           const SizedBox(width: 20),
@@ -365,7 +343,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 onChanged: handleSearch,
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: "Search signals...",
+                  hintText: "Search articles...",
                   prefixIcon: const Icon(FontAwesomeIcons.magnifyingGlass, size: 12),
                   filled: true,
                   fillColor: Colors.white.withAlpha(13),
@@ -376,14 +354,15 @@ class _NewsDashboardState extends State<NewsDashboard> {
             ),
           ),
           const SizedBox(width: 20),
+          // MODIFIED: Settings button hides text on smaller screens
           ElevatedButton(
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white.withAlpha(13),
               foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: screenWidth > 700 ? 20 : 12, vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
-                side: const BorderSide(color: Colors.white10),
+              padding: EdgeInsets.symmetric(horizontal: screenWidth > 700 ? 20 : 12, vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+              side: const BorderSide(color: Colors.white10),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -401,7 +380,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: The Loading Screen
+  /// UI: The Spinner
   Widget _buildLoader() {
     return Center(
       child: Column(
@@ -409,30 +388,13 @@ class _NewsDashboardState extends State<NewsDashboard> {
         children: [
           CircularProgressIndicator(color: widget.primaryColor),
           const SizedBox(height: 16),
-          // MODIFIED: Wording updated as requested
           Text("FETCHING ARTICLES...", style: TextStyle(color: widget.primaryColor, letterSpacing: 4, fontSize: 10)),
         ],
       ),
     );
   }
 
-  /// UI: Error screen if internet fails
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(FontAwesomeIcons.circleExclamation, size: 40, color: Colors.white24),
-          const SizedBox(height: 20),
-          const Text("NO ARTICLES FOUND", style: TextStyle(letterSpacing: 2, color: Colors.white54)),
-          const SizedBox(height: 10),
-          TextButton(onPressed: loadNews, child: Text("RETRY", style: TextStyle(color: widget.primaryColor)))
-        ],
-      ),
-    );
-  }
-
-  /// UI: The actual news articles layout
+  /// UI: The Main Content (Hero + Grid)
   Widget _buildContent(double screenWidth, int crossAxisCount) {
     return CustomScrollView(
       slivers: [
@@ -455,37 +417,34 @@ class _NewsDashboardState extends State<NewsDashboard> {
             ),
           ),
         ),
-        // The BIG FEATURED article at the top
         if (filteredArticles.isNotEmpty)
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             sliver: SliverToBoxAdapter(child: _buildHero(filteredArticles[0])),
           ),
-          // The GRID of articles below the hero
-          SliverPadding(
-            padding: const EdgeInsets.all(32),
-            sliver: SliverGrid(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                crossAxisSpacing: 40,
-                mainAxisSpacing: 60,
-                childAspectRatio: 0.85,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  // Skip the first article (because it's already shown in Hero)
-                  if (index + 1 >= filteredArticles.length) return null;
-                  return _buildArticleCard(filteredArticles[index + 1]);
-                },
-                childCount: filteredArticles.length > 1 ? filteredArticles.length - 1 : 0,
-              ),
+        SliverPadding(
+          padding: const EdgeInsets.all(32),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 40,
+              mainAxisSpacing: 60,
+              childAspectRatio: 0.85,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (index + 1 >= filteredArticles.length) return null;
+                return _buildArticleCard(filteredArticles[index + 1]);
+              },
+              childCount: filteredArticles.length > 1 ? filteredArticles.length - 1 : 0,
             ),
           ),
+        ),
       ],
     );
   }
 
-  /// UI: Featured Headline Card
+  /// UI: Headline Feature Card
   Widget _buildHero(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
@@ -495,8 +454,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
         child: Stack(
           children: [
             art.thumbnail.isNotEmpty
-            ? Positioned.fill(child: Image.network(art.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: Colors.black)))
-            : Container(color: Colors.black26),
+                ? Positioned.fill(child: Image.network(art.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: Colors.black)))
+                : Container(color: Colors.black26),
             Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Color(0xFF0e0e0e)])))),
             Positioned(
               top: 20,
@@ -520,7 +479,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Standard Grid Card
+  /// UI: Standard News Card
   Widget _buildArticleCard(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
@@ -529,9 +488,9 @@ class _NewsDashboardState extends State<NewsDashboard> {
           aspectRatio: 16 / 9,
           child: Container(
             decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: Colors.white10)),
-            child: art.thumbnail.isNotEmpty
-            ? Image.network(art.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(FontAwesomeIcons.satelliteDish))
-            : const Center(child: Icon(FontAwesomeIcons.satelliteDish)),
+            child: art.thumbnail.isNotEmpty 
+              ? Image.network(art.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(FontAwesomeIcons.satelliteDish))
+              : const Center(child: Icon(FontAwesomeIcons.satelliteDish)),
           ),
         ),
         const SizedBox(height: 16),
@@ -542,7 +501,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Little labels like "LABOUR" or "PICKET LINE"
   Widget _badge(String text, Color bg, Color textCol) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -551,7 +509,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: The Sidebar Drawer
+  /// UI: Settings Drawer
   Widget _buildSidebar() {
     return Drawer(
       backgroundColor: const Color(0xFF131313),
@@ -583,7 +541,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: The IA/Michael West Toggle
+  /// UI: Michael West / IA Toggle
   Widget _buildExtendedToggle() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -597,7 +555,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
               const Text("EXTENDED COVERAGE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
               Switch(
                 value: isExtendedCoverageEnabled,
-                // Uses the modern replacement for 'activeColor' to fix deprecation warning
                 activeThumbColor: widget.primaryColor,
                 onChanged: (val) => _toggleExtendedCoverage(val),
               ),
@@ -613,24 +570,21 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Sidebar sub-headers
   Widget _sidebarSectionTitle(IconData icon, String title) {
     return Row(children: [Icon(icon, size: 10, color: Colors.white38), const SizedBox(width: 10), Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.white38))]);
   }
 
-  /// UI: Theme color selection grid
   Widget _buildThemePicker() {
     List<Color> themes = [const Color(0xFFf59e0b), const Color(0xFFf43f5e), const Color(0xFF8b5cf6), const Color(0xFF6366f1), const Color(0xFF3b82f6), const Color(0xFF10b981)];
     return Wrap(
-      spacing: 10, runSpacing: 10,
+      spacing: 10, runSpacing: 10, 
       children: themes.map((color) => GestureDetector(
-        onTap: () => widget.onThemeChanged(color),
+        onTap: () => widget.onThemeChanged(color), 
         child: Container(width: 40, height: 40, decoration: BoxDecoration(color: color, border: Border.all(color: widget.primaryColor == color ? Colors.white : Colors.transparent, width: 2)))
       )).toList()
     );
   }
 
-  /// UI: Topic filter tab buttons
   Widget _buildTopicFilters() {
     List<String> topics = ["ALL", ...topicConfig.keys];
     return Column(children: topics.map((t) => Padding(padding: const EdgeInsets.only(bottom: 8.0), child: SizedBox(width: double.infinity, child: TextButton(onPressed: () => applyFilter(t), style: TextButton.styleFrom(alignment: Alignment.centerLeft, backgroundColor: currentFilter == t ? widget.primaryColor : Colors.transparent, shape: const RoundedRectangleBorder(), side: BorderSide(color: currentFilter == t ? widget.primaryColor : Colors.white10), padding: const EdgeInsets.all(16)), child: Text(t.toUpperCase(), style: TextStyle(color: currentFilter == t ? Colors.black : Colors.white60, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2)))))).toList());
