@@ -1,14 +1,15 @@
-import 'dart:convert'; // For turning web data into JSON
-import 'package:flutter/material.dart'; // The core UI kit
-import 'package:http/http.dart' as http; // For web requests
-import 'package:google_fonts/google_fonts.dart'; // Typography
-import 'package:url_launcher/url_launcher.dart'; // Browser links
-import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // Icons
-import 'package:intl/intl.dart'; // Date formatting
-import 'package:shared_preferences/shared_preferences.dart'; // Browser memory
+import 'dart:convert';
+import 'dart:async'; // Required for the Auto-Scroll Timer
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// ===========================================================================
-/// 1. CENTRALIZED COLOR PALETTE (MODULAR)
+/// 1. CENTRALIZED COLOR PALETTE
 /// ===========================================================================
 class AppColors {
   static const Color appBackground = Color(0xFF0e0e0e); 
@@ -94,7 +95,7 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
 }
 
 /// ===========================================================================
-/// 3. ARTICLE DATA BLUEPRINT
+/// 3. DATA BLUEPRINT
 /// ===========================================================================
 class Article {
   final String title;
@@ -132,7 +133,7 @@ class Article {
 }
 
 /// ===========================================================================
-/// 4. SOURCE CONFIGURATIONS & GEO-FILTERING
+/// 4. SOURCE CONFIGURATIONS & TOPICS
 /// ===========================================================================
 const Map<String, String> coreSources = {
   "https://ancomfed.org/picket-line/feed": "PICKET LINE",
@@ -152,9 +153,7 @@ const Map<String, String> coreSources = {
   "https://seqldiww.org/category/australia/feed": "IWW (SOUTH EAST QUEENSLAND)"
 };
 
-const Map<String, String> globalSources = {
-  "https://jacobin.com/feed": "JACOBIN",
-};
+const Map<String, String> globalSources = { "https://jacobin.com/feed": "JACOBIN" };
 
 const Map<String, String> extendedSources = {
   "https://michaelwest.com.au/category/latest-posts/feed/": "MICHAEL WEST",
@@ -169,9 +168,6 @@ const List<String> australianKeywords = [
   "tasmania", "albanese", "dutton", "nsw", "vic", "qld", "western australia"
 ];
 
-/// ===========================================================================
-/// TOPICS CONFIGURATION
-/// ===========================================================================
 const Map<String, List<String>> topicConfig = {
   "ECONOMY": ["economy", "economic", "inflation", "cost of living", "tax", "wealth", "poverty", "rates", "reserve bank", "budget"],
   "ENVIRONMENT": ["climate", "environment", "warming", "emissions", "coal", "gas", "renewables", "green", "forest", "logging"],
@@ -199,7 +195,10 @@ class NewsDashboard extends StatefulWidget {
 
 class _NewsDashboardState extends State<NewsDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  
+  final PageController _heroController = PageController(); // Controls the Hero Carousel
+  Timer? _carouselTimer; // Timer for auto-scrolling
+  int _currentHeroPage = 0; // Tracks which of the 3 articles is showing
+
   List<Article> masterArticles = []; 
   List<Article> filteredArticles = []; 
   bool isLoading = true; 
@@ -211,6 +210,13 @@ class _NewsDashboardState extends State<NewsDashboard> {
   void initState() {
     super.initState();
     _startApp();
+  }
+
+  @override
+  void dispose() {
+    _heroController.dispose();
+    _carouselTimer?.cancel();
+    super.dispose();
   }
 
   void _startApp() async {
@@ -225,6 +231,29 @@ class _NewsDashboardState extends State<NewsDashboard> {
     }
   }
 
+  /// CAROUSEL LOGIC: Automatic scrolling
+  void _startAutoScroll() {
+    _carouselTimer?.cancel();
+    _carouselTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_heroController.hasClients) {
+        int nextItem = _currentHeroPage + 1;
+        if (nextItem > 2) nextItem = 0; // Loop back to the first article
+        _heroController.animateToPage(
+          nextItem,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeInOutQuart,
+        );
+      }
+    });
+  }
+
+  /// CAROUSEL LOGIC: Extended pause when user interacts
+  void _onUserInteractedWithCarousel() {
+    _carouselTimer?.cancel();
+    // Restart auto-scroll after a 15-second delay instead of 5
+    Timer(const Duration(seconds: 15), () => _startAutoScroll());
+  }
+
   Future<void> _toggleExtendedCoverage(bool val) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('extended_coverage', val);
@@ -235,57 +264,43 @@ class _NewsDashboardState extends State<NewsDashboard> {
     loadNews();
   }
 
-  /// ===========================================================================
-  /// THE SMART LOADER: Implements Priority Tagging
-  /// ===========================================================================
   Future<void> loadNews() async {
     List<Article> allFetched = [];
     Map<String, String> activeSources = Map.from(coreSources);
     activeSources.addAll(globalSources); 
-    
-    if (isExtendedCoverageEnabled) {
-      activeSources.addAll(extendedSources);
-    }
+    if (isExtendedCoverageEnabled) activeSources.addAll(extendedSources);
 
     for (var entry in activeSources.entries) {
       try {
         final response = await http.get(Uri.parse(
             'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(entry.key)}'
         ));
-
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           if (data['status'] == 'ok') {
             for (var item in data['items']) {
-              String title = item['title'] ?? "";
-              String description = item['description'] ?? "";
-              String contentToSearch = (title + " " + description).toLowerCase();
+              String title = (item['title'] ?? "").toLowerCase();
+              String description = (item['description'] ?? "").toLowerCase();
+              String contentToSearch = "$title $description";
               
-              // GEOGRAPHIC FILTER (e.g. Jacobin)
-              bool isGlobal = globalSources.containsValue(entry.value);
-              if (isGlobal) {
-                bool hasAuKeyword = australianKeywords.any((keyword) => contentToSearch.contains(keyword));
-                if (!hasAuKeyword) continue; 
+              if (globalSources.containsValue(entry.value)) {
+                if (!australianKeywords.any((keyword) => contentToSearch.contains(keyword))) continue; 
               }
 
-              /// --- START PRIORITY TAGGING LOGIC ---
               List<String> detectedTopics = [];
               List<dynamic> rawPublisherTags = item['categories'] ?? [];
 
-              // Priority 1: Check existing publisher tags against our topicConfig
               if (rawPublisherTags.isNotEmpty) {
                 for (var rawTag in rawPublisherTags) {
-                  String tag = rawTag.toString().toUpperCase();
+                  String tag = rawTag.toString().toLowerCase();
                   topicConfig.forEach((topicName, keywords) {
-                    // Check if tag is an exact match for our topic OR matches our keywords
-                    if (tag == topicName || keywords.any((kw) => tag.contains(kw.toUpperCase()))) {
+                    if (keywords.any((kw) => tag.contains(kw.toLowerCase()))) {
                       if (!detectedTopics.contains(topicName)) detectedTopics.add(topicName);
                     }
                   });
                 }
               }
 
-              // Priority 2: Fallback to keyword scanning (if no publisher tags matched)
               if (detectedTopics.isEmpty) {
                 topicConfig.forEach((topicName, keywords) {
                   if (keywords.any((kw) => contentToSearch.contains(kw.toLowerCase()))) {
@@ -293,15 +308,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
                   }
                 });
               }
-              /// --- END PRIORITY TAGGING LOGIC ---
-              
               allFetched.add(Article.fromJson(item, entry.value, detectedTopics));
             }
           }
         }
-      } catch (e) {
-        debugPrint("Skipping ${entry.value}: $e");
-      }
+      } catch (e) { debugPrint("Skipping ${entry.value}: $e"); }
     }
 
     allFetched.sort((a, b) => b.pubDate.compareTo(a.pubDate));
@@ -312,6 +323,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         filteredArticles = allFetched;
         isLoading = false; 
         applyFilter(currentFilter); 
+        _startAutoScroll(); // Start the carousel once news is ready
       });
     }
   }
@@ -322,7 +334,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
       DateTime now = DateTime.now();
       Duration diff = now.difference(postDate);
       String dateOnly = DateFormat('dd/MM/yyyy').format(postDate);
-
       if (diff.inDays <= 3) {
         String relative;
         if (diff.inMinutes < 60) relative = "${diff.inMinutes}m ago";
@@ -337,11 +348,9 @@ class _NewsDashboardState extends State<NewsDashboard> {
   void applyFilter(String topic) {
     setState(() {
       currentFilter = topic;
-      if (topic == "ALL") {
-        filteredArticles = masterArticles;
-      } else {
-        filteredArticles = masterArticles.where((a) => a.topics.contains(topic)).toList();
-      }
+      filteredArticles = (topic == "ALL") 
+          ? masterArticles 
+          : masterArticles.where((a) => a.topics.contains(topic)).toList();
     });
   }
 
@@ -355,7 +364,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   /// ===========================================================================
-  /// 7. USER INTERFACE (BUILD)
+  /// 6. USER INTERFACE (BUILD)
   /// ===========================================================================
   @override
   Widget build(BuildContext context) {
@@ -369,7 +378,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
         children: [
           _buildBetaBanner(), 
           _buildHeaderWrapper(screenWidth), 
-          
           Expanded(
             child: ListView(
               children: [
@@ -509,21 +517,21 @@ class _NewsDashboardState extends State<NewsDashboard> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: Text(
-                  "RECENT NEWS",
-                  style: GoogleFonts.spaceGrotesk(fontSize: screenWidth > 600 ? 60 : 32, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic, letterSpacing: -2, color: AppColors.textMain),
-                ),
+                child: Text("RECENT NEWS", style: GoogleFonts.spaceGrotesk(fontSize: screenWidth > 600 ? 60 : 32, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic, letterSpacing: -2, color: AppColors.textMain)),
               ),
               if (screenWidth > 600)
                 Text("REFRESHED: ${DateFormat('HH:mm').format(DateTime.now())}", style: const TextStyle(fontSize: 10, color: AppColors.textMuted, letterSpacing: 2)),
             ],
           ),
         ),
+
+        /// --- THE NEW HERO CAROUSEL ---
         if (filteredArticles.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: _buildHero(filteredArticles[0]),
+            child: _buildHeroCarousel(screenWidth),
           ),
+
         Padding(
           padding: const EdgeInsets.all(32),
           child: GridView.builder(
@@ -532,22 +540,97 @@ class _NewsDashboardState extends State<NewsDashboard> {
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
               crossAxisSpacing: 30, 
-              mainAxisSpacing: 30, 
+              mainAxisSpacing: 40, 
               childAspectRatio: 0.85, 
             ),
-            itemCount: filteredArticles.length > 1 ? filteredArticles.length - 1 : 0,
-            itemBuilder: (context, index) => _buildArticleCard(filteredArticles[index + 1]),
+            // Start from index 3 because 0, 1, 2 are in the Hero Carousel
+            itemCount: filteredArticles.length > 3 ? filteredArticles.length - 3 : 0,
+            itemBuilder: (context, index) => _buildArticleCard(filteredArticles[index + 3]),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildHero(Article art) {
+  /// UI: THE DYNAMIC HERO CAROUSEL
+  Widget _buildHeroCarousel(double screenWidth) {
+    // We only take the 3 most recent articles for the top slider
+    final carouselItems = filteredArticles.take(3).toList();
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox(
+          height: 450,
+          child: PageView.builder(
+            controller: _heroController,
+            onPageChanged: (idx) => setState(() => _currentHeroPage = idx),
+            itemCount: carouselItems.length,
+            itemBuilder: (context, index) => _buildHeroItem(carouselItems[index]),
+          ),
+        ),
+
+        // Desktop Only: Left Arrow
+        if (screenWidth > 1000)
+          Positioned(
+            left: 10,
+            child: _carouselArrow(FontAwesomeIcons.chevronLeft, () {
+              _onUserInteractedWithCarousel();
+              _heroController.previousPage(duration: const Duration(milliseconds: 500), curve: Curves.ease);
+            }),
+          ),
+
+        // Desktop Only: Right Arrow
+        if (screenWidth > 1000)
+          Positioned(
+            right: 10,
+            child: _carouselArrow(FontAwesomeIcons.chevronRight, () {
+              _onUserInteractedWithCarousel();
+              _heroController.nextPage(duration: const Duration(milliseconds: 500), curve: Curves.ease);
+            }),
+          ),
+          
+        // Visual Page Indicators (Subtle dots at the bottom)
+        Positioned(
+          bottom: 20,
+          child: Row(
+            children: List.generate(carouselItems.length, (index) => AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              height: 4,
+              width: _currentHeroPage == index ? 24 : 8,
+              decoration: BoxDecoration(
+                color: _currentHeroPage == index ? widget.primaryColor : Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            )),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _carouselArrow(IconData icon, VoidCallback onTap) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.5),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 16, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeroItem(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
       child: Container(
-        height: 450,
         decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.borderSubtle)),
         child: Stack(
           children: [
@@ -584,15 +667,12 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: REGULAR ARTICLE TILE (Fixed with Topics)
+  /// UI: REGULAR ARTICLE TILE
   Widget _buildArticleCard(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
       child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.tileBackground, 
-          border: Border.all(color: AppColors.borderSubtle),
-        ),
+        decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.borderSubtle)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, 
           children: [
@@ -614,24 +694,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     children: [
                       Icon(FontAwesomeIcons.calendarDay, size: 9, color: widget.primaryColor.withAlpha(150)),
                       const SizedBox(width: 8),
-                      Text(
-                        getFormattedArticleDate(art.pubDate).toUpperCase(),
-                        style: const TextStyle(fontSize: 9, color: AppColors.textSubtle, fontWeight: FontWeight.bold, letterSpacing: 1),
-                      ),
+                      Text(getFormattedArticleDate(art.pubDate).toUpperCase(), style: const TextStyle(fontSize: 9, color: AppColors.textSubtle, fontWeight: FontWeight.bold, letterSpacing: 1)),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  
-                  // ADDED: Topic Badges for regular tiles
-                  if (art.topics.isNotEmpty) ...[
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: art.topics.map((t) => _badge(t, AppColors.highlightOverlay, AppColors.textMain)).toList(),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-
                   Text(art.source, style: TextStyle(color: widget.primaryColor, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
                   const SizedBox(height: 8),
                   SizedBox(
@@ -643,9 +709,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     height: 40, 
                     child: Text(
                       art.description.isEmpty ? "No summary available." : art.description, 
-                      maxLines: 2, 
-                      overflow: TextOverflow.ellipsis, 
-                      style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.5)
+                      maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.5)
                     ),
                   ),
                 ],
