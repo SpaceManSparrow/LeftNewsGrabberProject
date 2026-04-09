@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:async'; // Required for Auto-Scroll Timers
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
@@ -9,7 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// ===========================================================================
-/// 1. CENTRALIZED DESIGN SYSTEM (AppColors)
+/// 1. CENTRALIZED DESIGN SYSTEM
 /// ===========================================================================
 class AppColors {
   static const Color appBackground = Color(0xFF0e0e0e); 
@@ -30,7 +30,7 @@ class AppColors {
 }
 
 /// ===========================================================================
-/// 2. APP CONFIGURATION (Data Store)
+/// 2. APP CONFIGURATION
 /// ===========================================================================
 class AppConfig {
   static const Map<String, String> coreSources = {
@@ -82,7 +82,7 @@ class AppConfig {
 void main() => runApp(const TheRadicalApp());
 
 /// ===========================================================================
-/// 3. ROOT WIDGET (Handles Persistence)
+/// 3. ROOT WIDGET
 /// ===========================================================================
 class TheRadicalApp extends StatefulWidget {
   const TheRadicalApp({super.key});
@@ -135,13 +135,25 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
 }
 
 /// ===========================================================================
-/// 4. ARTICLE DATA MODEL (FIXED WITH PROXY & DESCRIPTION CLEANING)
+/// 4. ARTICLE DATA MODEL (STABLE VERSION)
 /// ===========================================================================
 
-/// HELPER: Forces images through a CORS proxy
+/// PROXY HELPER: Cleans URLs and strips WordPress proxies to prevent 400 errors
 String _wrapProxy(String url) {
   if (url.isEmpty || url.startsWith('https://images.weserv.nl')) return url;
-  return "https://images.weserv.nl/?url=${Uri.encodeComponent(url)}&w=800&fit=cover";
+
+  String cleanUrl = url;
+  
+  // Strip WordPress Photon proxy (i0.wp.com) which breaks when re-proxied
+  if (cleanUrl.contains("i0.wp.com/")) {
+    cleanUrl = cleanUrl.split("i0.wp.com/").last; 
+    cleanUrl = "https://${cleanUrl.split("?").first}"; 
+  }
+
+  // Ensure characters are decoded before being re-encoded for the proxy
+  cleanUrl = Uri.decodeFull(cleanUrl);
+
+  return "https://images.weserv.nl/?url=${Uri.encodeComponent(cleanUrl)}&w=1200&fit=cover&output=webp";
 }
 
 class Article {
@@ -156,43 +168,40 @@ class Article {
   });
 
   factory Article.fromJson(Map<String, dynamic> json, String sourceName, List<String> detectedTopics) {
-    String rawDesc = json['description'] ?? '';
-    String foundThumb = json['thumbnail'] ?? '';
+    String rawDesc = json['description']?.toString() ?? '';
+    String foundThumb = json['thumbnail']?.toString() ?? '';
 
-    // If thumbnail is missing, try to scrape it from the description HTML
+    // If meta thumbnail is missing, scrape from HTML content
     if (foundThumb.isEmpty || foundThumb.contains('favicon')) {
       RegExp imgExp = RegExp(r'<img[^>]+src="([^">]+)"');
-      Iterable<RegExpMatch> matches = imgExp.allMatches(rawDesc);
+      var matches = imgExp.allMatches(rawDesc);
       if (matches.isNotEmpty) {
         foundThumb = matches.first.group(1) ?? '';
       }
     }
 
-    // FIX A: Apply Proxy to the thumbnail immediately
-    String proxiedThumb = _wrapProxy(foundThumb);
-
-    // FIX B: Clean description by specifically targeting <img> tags first (kills trackers)
+    // Scrub description of tracking pixels and all HTML tags
     String cleanDescription = rawDesc
-        .replaceAll(RegExp(r'<img[^>]*>'), '') // Removes tracking pixels/embedded images
-        .replaceAll(RegExp(r'<[^>]*>'), '')    // Removes all other HTML tags
+        .replaceAll(RegExp(r'<img[^>]*>'), '') // Kill tracking pixels / hidden images
+        .replaceAll(RegExp(r'<[^>]*>'), '')    // Kill all remaining HTML tags
         .replaceAll('&nbsp;', ' ')
         .trim();
 
     return Article(
-      title: json['title'] ?? '',
+      title: json['title'] ?? 'Untitled',
       link: json['link'] ?? '',
       parsedDate: DateTime.tryParse(json['pubDate'] ?? '') ?? DateTime.now(),
       pubDate: json['pubDate'] ?? '',
       description: cleanDescription,
       source: sourceName,
-      thumbnail: proxiedThumb,
+      thumbnail: _wrapProxy(foundThumb),
       topics: detectedTopics,
     );
   }
 }
 
 /// ===========================================================================
-/// 5. MAIN DASHBOARD LOGIC (The Smart Engine)
+/// 5. MAIN DASHBOARD LOGIC
 /// ===========================================================================
 class NewsDashboard extends StatefulWidget {
   final Color primaryColor;
@@ -261,7 +270,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
     int stagger = 0;
     List<Future<void>> tasks = sources.entries.map((entry) async {
-      stagger += 50; 
+      stagger += 30; 
       await Future.delayed(Duration(milliseconds: stagger));
       
       try {
@@ -282,6 +291,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 if (!AppConfig.auKeywords.any((k) => content.contains(k))) continue;
               }
 
+              // Topic tagging logic
               List<String> tags = [];
               List cats = item['categories'] ?? [];
               for (var c in cats) {
@@ -315,6 +325,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
     }).toList();
 
     await Future.wait(tasks);
+    
+    // FINAL MASTER FEED SORT (Date Time Chronological)
     results.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
     
     if (mounted) {
@@ -382,6 +394,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
       ),
     );
   }
+
+  /// ===========================================================================
+  /// UI COMPONENTS
+  /// ===========================================================================
 
   Widget _fixedTopSection(double width) {
     return Column(
