@@ -1,18 +1,58 @@
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert'; // Required for translating raw web data into JSON format
+import 'package:flutter/material.dart'; // The core UI toolkit for Flutter
+import 'package:http/http.dart' as http; // For making web requests to news feeds
+import 'package:google_fonts/google_fonts.dart'; // For Space Grotesk and Manrope fonts
+import 'package:url_launcher/url_launcher.dart'; // To open news links in a browser
+import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // For the sliders icon
+import 'package:intl/intl.dart'; // For formatting dates
+import 'package:shared_preferences/shared_preferences.dart'; // To remember settings in the browser
 
-/// 1. ENTRY POINT
+/// ===========================================================================
+/// 1. CENTRALIZED COLOR PALETTE
+/// ===========================================================================
+/// By keeping all our colors here, we can change the design of the entire 
+/// website by just changing a hex code in one place.
+class AppColors {
+  // Backgrounds
+  static const Color appBackground = Color(0xFF0e0e0e); // The main dark background
+  static const Color appSurface = Color(0xFF131313); // Slightly lighter background for cards/menus
+  static const Color pureBlack = Color(0xFF000000); // Used for the "void" outside the 1800px max-width
+  
+  // Borders & Overlays
+  static const Color borderSubtle = Colors.white10; // Very faint white line for borders
+  static const Color glassOverlay = Color(0xCC0E0E0E); // Semi-transparent background for the sticky header
+  static const Color highlightOverlay = Color(0x0DFFFFFF); // Faint white highlight for text boxes/buttons
+
+  // Text Colors
+  static const Color textMain = Colors.white; // Pure white for titles
+  static const Color textMuted = Colors.white54; // Dimmed white for paragraph text/descriptions
+  static const Color textSubtle = Colors.white38; // Very dimmed white for dates and small icons
+
+  // The 6 Theme Choices for the Control Panel
+  static const Color themeAmber = Color(0xFFf59e0b);
+  static const Color themeRose = Color(0xFFf43f5e);
+  static const Color themeViolet = Color(0xFF8b5cf6);
+  static const Color themeIndigo = Color(0xFF6366f1);
+  static const Color themeBlue = Color(0xFF3b82f6);
+  static const Color themeEmerald = Color(0xFF10b981);
+
+  // List of all themes for the Settings generator
+  static const List<Color> allThemes = [
+    themeAmber, themeRose, themeViolet, themeIndigo, themeBlue, themeEmerald
+  ];
+}
+
+/// ===========================================================================
+/// 2. ENTRY POINT
+/// ===========================================================================
 void main() {
   runApp(const TheRadicalApp());
 }
 
-/// 2. THE ROOT WIDGET
+/// ===========================================================================
+/// 3. THE ROOT WIDGET
+/// ===========================================================================
+/// Handles the high-level setup: Theme, Memory, and the 1800px Max-Width.
 class TheRadicalApp extends StatefulWidget {
   const TheRadicalApp({super.key});
 
@@ -21,37 +61,37 @@ class TheRadicalApp extends StatefulWidget {
 }
 
 class _TheRadicalAppState extends State<TheRadicalApp> {
-  // We keep the theme color here at the top level
-  Color primaryColor = const Color(0xFFf59e0b);
+  // Dynamic primary color that changes based on user preference. Defaults to Amber.
+  Color primaryColor = AppColors.themeAmber; 
 
   @override
   void initState() {
     super.initState();
-    _loadSavedTheme(); // Load saved color from browser memory
+    _loadSavedSettings(); // Check browser memory as soon as the app starts.
   }
 
-  /// MEMORY: Check browser for saved color
-  Future<void> _loadSavedTheme() async {
+  /// MEMORY: Load the saved color from browser storage
+  Future<void> _loadSavedSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final int? colorValue = prefs.getInt('theme_color');
       if (colorValue != null) {
         setState(() {
-          primaryColor = Color(colorValue);
+          primaryColor = Color(colorValue); // Apply saved color to the app
         });
       }
     } catch (e) {
-      debugPrint("Memory error: $e"); // If browser blocks memory, app still runs
+      debugPrint("Memory load error: $e");
     }
   }
 
-  /// MEMORY: Save color when changed
+  /// MEMORY: Save the color when changed in settings
   void updateTheme(Color newColor) async {
     setState(() {
-      primaryColor = newColor;
+      primaryColor = newColor; // Update screen instantly
     });
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('theme_color', newColor.toARGB32());
+    await prefs.setInt('theme_color', newColor.toARGB32()); // Save to memory
   }
 
   @override
@@ -61,17 +101,17 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0e0e0e),
+        scaffoldBackgroundColor: AppColors.appBackground,
         primaryColor: primaryColor,
         textTheme: GoogleFonts.manropeTextTheme(ThemeData.dark().textTheme),
       ),
-      // Here we implement the Max-Width and Centering
       home: Scaffold(
-        backgroundColor: const Color(0xFF000000), // Background for wide screens
+        backgroundColor: AppColors.pureBlack, // Background for ultra-wide screens
         body: Center(
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 1800), // Max Width Limit
-            decoration: const BoxDecoration(color: Color(0xFF0e0e0e)),
+            // MAX WIDTH: Centered website layout maxed at 1800px wide
+            constraints: const BoxConstraints(maxWidth: 1800),
+            decoration: const BoxDecoration(color: AppColors.appBackground),
             child: NewsDashboard(
               primaryColor: primaryColor,
               onThemeChanged: updateTheme,
@@ -83,12 +123,14 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
   }
 }
 
-/// 3. ARTICLE DATA MODEL
+/// ===========================================================================
+/// 4. ARTICLE DATA BLUEPRINT
+/// ===========================================================================
 class Article {
   final String title;
   final String link;
   final String pubDate;
-  final String description;
+  final String description; // The summary text
   final String source;
   final String thumbnail;
   final List<String> topics;
@@ -103,11 +145,13 @@ class Article {
     required this.topics,
   });
 
+  // Factory converts raw web JSON into this structured class
   factory Article.fromJson(Map<String, dynamic> json, String sourceName, List<String> detectedTopics) {
     return Article(
       title: json['title'] ?? '',
       link: json['link'] ?? '',
       pubDate: json['pubDate'] ?? '',
+      // .replaceAll removes HTML code (like <p> or <img>) from the article summary
       description: (json['description'] as String).replaceAll(RegExp(r'<[^>]*>'), ''),
       source: sourceName,
       thumbnail: json['thumbnail'] ?? '',
@@ -116,7 +160,10 @@ class Article {
   }
 }
 
-/// 4. SOURCE CONFIGURATIONS
+/// ===========================================================================
+/// 5. SOURCE CONFIGURATIONS & GEO-FILTERING
+/// ===========================================================================
+/// Category A: Local sources (Always shown)
 const Map<String, String> coreSources = {
   "https://ancomfed.org/picket-line/feed": "PICKET LINE",
   "https://www.greenleft.org.au/rss.xml": "GREEN LEFT",
@@ -130,14 +177,31 @@ const Map<String, String> coreSources = {
   "https://vanguard-cpaml.blogspot.com/rss.xml": "VANGUARD",
   "https://partisanmagazine.org/feed/": "PARTISAN!",
   "https://redantcollective.org/feed": "RED ANT",
-  "https://www.theguardian.com/australia-news/australian-trade-unions/rss": "THE GUARDIAN"
+  "https://www.theguardian.com/australia-news/australian-trade-unions/rss": "THE GUARDIAN",
+  "https://bccm.coop/latest-news/feed": "BCCM",
+  "https://temokalati.wordpress.com/feed": "TEMOKALATI",
+  "https://www.thenews.coop/country/oceania/feed": "CO-OP NEWS",
 };
 
+/// Category B: Global sources (Only shown if they contain Australian keywords)
+const Map<String, String> globalSources = {
+  "https://jacobin.com/feed": "JACOBIN",
+};
+
+/// Category C: Extended sources (Toggled via Settings)
 const Map<String, String> extendedSources = {
-  "https://www.michaelwest.com.au/feed/": "MICHAEL WEST",
-  "https://independentaustralia.net/rss.xml": "INDEPENDENT AUSTRALIA",
+  "https://michaelwest.com.au/category/latest-posts/feed/": "MICHAEL WEST",
+  "http://feeds.feedburner.com/IndependentAustralia": "INDEPENDENT AUSTRALIA"
 };
 
+/// GEO-FILTERING: Words that a 'Global' article MUST have to be shown
+const List<String> australianKeywords = [
+  "australia", "australian", "sydney", "melbourne", "brisbane", "perth", 
+  "adelaide", "canberra", "hobart", "darwin", "victoria", "queensland", 
+  "tasmania", "albanese", "dutton", "nsw", "vic", "qld", "western australia"
+];
+
+/// TOPIC TAGGING: Keywords used to automatically assign topics
 const Map<String, List<String>> topicConfig = {
   "Labour": ["strike", "union", "worker", "picket", "wage", "industrial", "cfmeu", "workplace", "unemployment", "labour", "fair work"],
   "Middle East": ["gaza", "palestine", "israel", "occupation", "zionism", "rafah", "genocide", "iran", "tehran", "lebanon", "beirut", "yemen", "houthi"],
@@ -146,7 +210,9 @@ const Map<String, List<String>> topicConfig = {
   "Anti-Fascism": ["fascism", "far-right", "nazi", "racism", "protest", "police", "surveillance"]
 };
 
-/// 5. MAIN DASHBOARD LOGIC
+/// ===========================================================================
+/// 6. MAIN DASHBOARD LOGIC
+/// ===========================================================================
 class NewsDashboard extends StatefulWidget {
   final Color primaryColor;
   final Function(Color) onThemeChanged;
@@ -160,12 +226,12 @@ class NewsDashboard extends StatefulWidget {
 class _NewsDashboardState extends State<NewsDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
-  List<Article> masterArticles = [];
-  List<Article> filteredArticles = [];
-  bool isLoading = true;
-  bool isExtendedCoverageEnabled = false;
-  String currentFilter = "ALL";
-  final TextEditingController _searchController = TextEditingController();
+  List<Article> masterArticles = []; // Complete news list
+  List<Article> filteredArticles = []; // List shown on screen
+  bool isLoading = true; // Tracks if data is downloading
+  bool isExtendedCoverageEnabled = false; // Toggle state
+  String currentFilter = "ALL"; // Topic tab selected
+  final TextEditingController _searchController = TextEditingController(); // Search bar logic
 
   @override
   void initState() {
@@ -173,49 +239,44 @@ class _NewsDashboardState extends State<NewsDashboard> {
     _startApp();
   }
 
-  /// STARTUP SEQUENCE: Fetch news immediately, load memory settings in background
+  /// STARTUP SEQUENCE
   void _startApp() async {
-    // 1. Fetch news immediately (Standard working logic)
-    loadNews();
-    
-    // 2. Load IA/Michael West toggle setting from memory afterward
+    loadNews(); // Download the news articles immediately
     try {
       final prefs = await SharedPreferences.getInstance();
-      bool savedToggle = prefs.getBool('extended_coverage') ?? false;
-      if (savedToggle != isExtendedCoverageEnabled) {
-        setState(() {
-          isExtendedCoverageEnabled = savedToggle;
-          isLoading = true;
-        });
-        loadNews(); // Refresh news if toggle was meant to be ON
-      }
+      setState(() {
+        isExtendedCoverageEnabled = prefs.getBool('extended_coverage') ?? false;
+      });
     } catch (e) {
-      debugPrint("Memory toggle error: $e");
+      debugPrint("Toggle load error: $e");
     }
   }
 
-  /// MEMORY: Save the Extended News toggle
+  /// MEMORY: Save the "Extended Coverage" toggle
   Future<void> _toggleExtendedCoverage(bool val) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('extended_coverage', val);
     setState(() {
       isExtendedCoverageEnabled = val;
-      isLoading = true;
+      isLoading = true; // Show loading screen while we update the list
     });
     loadNews();
   }
 
-  /// STABLE NEWS LOADER (Matches the logic that worked in your original code)
+  /// THE LOADER: Downloads feeds, filters global news, and assigns topics
   Future<void> loadNews() async {
     List<Article> allFetched = [];
     
-    // Determine which sources to loop through
+    // Combine local + global sources
     Map<String, String> activeSources = Map.from(coreSources);
+    activeSources.addAll(globalSources); 
+    
+    // Add extended sources if toggle is ON
     if (isExtendedCoverageEnabled) {
       activeSources.addAll(extendedSources);
     }
 
-    // THE LOOP: Fetches one by one (The most stable way to avoid browser blocking)
+    // Loop through each source and download data
     for (var entry in activeSources.entries) {
       try {
         final response = await http.get(Uri.parse(
@@ -226,8 +287,16 @@ class _NewsDashboardState extends State<NewsDashboard> {
           final data = json.decode(response.body);
           if (data['status'] == 'ok') {
             for (var item in data['items']) {
-              // Tag topics based on words found in title/summary
               String content = (item['title'] + (item['description'] ?? "")).toLowerCase();
+              
+              // GLOBAL FILTER: If it's a Global source, require Australian keywords
+              bool isGlobal = globalSources.containsValue(entry.value);
+              if (isGlobal) {
+                bool hasAuKeyword = australianKeywords.any((keyword) => content.contains(keyword));
+                if (!hasAuKeyword) continue; // Skip articles without local relevance
+              }
+
+              // Apply topic categories
               List<String> topics = [];
               topicConfig.forEach((key, keywords) {
                 if (keywords.any((kw) => content.contains(kw))) topics.add(key);
@@ -238,24 +307,54 @@ class _NewsDashboardState extends State<NewsDashboard> {
           }
         }
       } catch (e) {
-        debugPrint("Error fetching ${entry.value}: $e");
+        debugPrint("Skipping source ${entry.value} due to error: $e");
       }
     }
 
-    // Sort by newest date
+    // Sort: Newest articles at the top
     allFetched.sort((a, b) => b.pubDate.compareTo(a.pubDate));
 
     if (mounted) {
       setState(() {
         masterArticles = allFetched;
         filteredArticles = allFetched;
-        isLoading = false;
-        applyFilter(currentFilter);
+        isLoading = false; 
+        applyFilter(currentFilter); // Re-apply current topic tab filter
       });
     }
   }
 
-  /// SEARCH & FILTER
+  /// DATE LOGIC: Creates modern date strings (e.g. "2 days ago (07/04/2026)")
+  String getFormattedArticleDate(String dateStr) {
+    try {
+      DateTime postDate = DateTime.parse(dateStr);
+      DateTime now = DateTime.now();
+      Duration diff = now.difference(postDate);
+
+      // Standard date format: dd/MM/yyyy
+      String dateOnly = DateFormat('dd/MM/yyyy').format(postDate);
+
+      // If the article is 3 days old or newer, add the "Time Ago" prefix
+      if (diff.inDays <= 3) {
+        String relative;
+        if (diff.inMinutes < 60) {
+          relative = "${diff.inMinutes}m ago";
+        } else if (diff.inHours < 24) {
+          relative = "${diff.inHours}h ago";
+        } else {
+          relative = "${diff.inDays} ${diff.inDays == 1 ? 'day' : 'days'} ago";
+        }
+        return "$relative ($dateOnly)";
+      } else {
+        // If older than 3 days, just show the date
+        return dateOnly;
+      }
+    } catch (e) {
+      return "Recent";
+    }
+  }
+
+  /// UI LOGIC: Filter list by topic tab
   void applyFilter(String topic) {
     setState(() {
       currentFilter = topic;
@@ -267,6 +366,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     });
   }
 
+  /// UI LOGIC: Search list by typing
   void handleSearch(String query) {
     setState(() {
       filteredArticles = masterArticles.where((a) {
@@ -276,24 +376,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
     });
   }
 
-  String timeAgo(String dateStr) {
-    try {
-      DateTime d = DateTime.parse(dateStr);
-      Duration diff = DateTime.now().difference(d);
-      if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
-      if (diff.inHours < 24) return "${diff.inHours}h ago";
-      return "${diff.inDays}d ago";
-    } catch (e) { return "Recent"; }
-  }
-
+  /// ===========================================================================
+  /// 7. USER INTERFACE (BUILD)
+  /// ===========================================================================
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
+    // Responsive columns: 3 for desktop, 2 for tablet, 1 for phone
     int crossAxisCount = screenWidth > 1200 ? 3 : (screenWidth > 800 ? 2 : 1);
 
     return Scaffold(
-      key: _scaffoldKey,
-      endDrawer: _buildSidebar(),
+      key: _scaffoldKey, // Link to sidebar controller
+      endDrawer: _buildSidebar(), // The Settings Sidebar
       body: Column(
         children: [
           _buildBetaBanner(),
@@ -308,7 +402,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Gold Top Banner
+  /// UI: Top Gold Banner
   Widget _buildBetaBanner() {
     return Container(
       width: double.infinity,
@@ -317,18 +411,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
       child: const Text(
         "THIS WEBSITE IS STILL IN BETA — DEVELOPMENT IN PROGRESS",
         textAlign: TextAlign.center,
-        style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2),
+        style: TextStyle(color: AppColors.pureBlack, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2),
       ),
     );
   }
 
-  /// UI: Navigation Header
+  /// UI: Logo and Search area
   Widget _buildHeader(double screenWidth) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0e0e0e).withAlpha(204),
-        border: const Border(bottom: BorderSide(color: Colors.white10)),
+      decoration: const BoxDecoration(
+        color: AppColors.glassOverlay,
+        border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
       ),
       child: Row(
         children: [
@@ -346,12 +440,13 @@ class _NewsDashboardState extends State<NewsDashboard> {
               child: TextField(
                 controller: _searchController,
                 onChanged: handleSearch,
-                style: const TextStyle(fontSize: 13),
+                style: const TextStyle(fontSize: 13, color: AppColors.textMain),
                 decoration: InputDecoration(
                   hintText: "Search articles...",
-                  prefixIcon: const Icon(FontAwesomeIcons.magnifyingGlass, size: 12),
+                  hintStyle: const TextStyle(color: AppColors.textMuted),
+                  prefixIcon: const Icon(FontAwesomeIcons.magnifyingGlass, size: 12, color: AppColors.textMuted),
                   filled: true,
-                  fillColor: Colors.white.withAlpha(13),
+                  fillColor: AppColors.highlightOverlay,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(99), borderSide: BorderSide.none),
                 ),
@@ -362,11 +457,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
           ElevatedButton(
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white.withAlpha(13),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.highlightOverlay,
+              foregroundColor: AppColors.textMain,
               padding: EdgeInsets.symmetric(horizontal: screenWidth > 700 ? 20 : 12, vertical: 15),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
-              side: const BorderSide(color: Colors.white10),
+              side: const BorderSide(color: AppColors.borderSubtle),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -384,7 +479,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Loading Screen
+  /// UI: Spinner
   Widget _buildLoader() {
     return Center(
       child: Column(
@@ -398,15 +493,15 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Nothing found screen
+  /// UI: Error state if nothing found
   Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(FontAwesomeIcons.circleExclamation, size: 40, color: Colors.white24),
+          const Icon(FontAwesomeIcons.circleExclamation, size: 40, color: AppColors.textSubtle),
           const SizedBox(height: 20),
-          const Text("NO ARTICLES FOUND", style: TextStyle(letterSpacing: 2, color: Colors.white54)),
+          const Text("NO ARTICLES FOUND", style: TextStyle(letterSpacing: 2, color: AppColors.textMuted)),
           const SizedBox(height: 10),
           TextButton(onPressed: loadNews, child: Text("RETRY", style: TextStyle(color: widget.primaryColor)))
         ],
@@ -414,7 +509,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: The actual news layout
+  /// UI: Article Grid Layout
   Widget _buildContent(double screenWidth, int crossAxisCount) {
     return CustomScrollView(
       slivers: [
@@ -428,20 +523,22 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 Expanded(
                   child: Text(
                     "RECENT NEWS",
-                    style: GoogleFonts.spaceGrotesk(fontSize: screenWidth > 600 ? 60 : 32, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic, letterSpacing: -2),
+                    style: GoogleFonts.spaceGrotesk(fontSize: screenWidth > 600 ? 60 : 32, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic, letterSpacing: -2, color: AppColors.textMain),
                   ),
                 ),
                 if (screenWidth > 600)
-                  Text("REFRESHED: ${DateFormat('HH:mm').format(DateTime.now())}", style: const TextStyle(fontSize: 10, color: Colors.white54, letterSpacing: 2)),
+                  Text("REFRESHED: ${DateFormat('HH:mm').format(DateTime.now())}", style: const TextStyle(fontSize: 10, color: AppColors.textMuted, letterSpacing: 2)),
               ],
             ),
           ),
         ),
+        // Headline feature
         if (filteredArticles.isNotEmpty)
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             sliver: SliverToBoxAdapter(child: _buildHero(filteredArticles[0])),
           ),
+        // Grid of articles
         SliverPadding(
           padding: const EdgeInsets.all(32),
           sliver: SliverGrid(
@@ -449,7 +546,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
               crossAxisCount: crossAxisCount,
               crossAxisSpacing: 40,
               mainAxisSpacing: 60,
-              childAspectRatio: 0.85,
+              // Lowered aspect ratio slightly to fit description text properly
+              childAspectRatio: 0.72, 
             ),
             delegate: SliverChildBuilderDelegate(
               (context, index) {
@@ -464,33 +562,43 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
+  /// UI: Featured Headline Widget
   Widget _buildHero(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
       child: Container(
         height: 450,
-        decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: Colors.white10)),
+        decoration: BoxDecoration(color: AppColors.appSurface, border: Border.all(color: AppColors.borderSubtle)),
         child: Stack(
           children: [
             art.thumbnail.isNotEmpty
-                ? Positioned.fill(child: Image.network(art.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: Colors.black)))
-                : Container(color: Colors.black26),
-            Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Color(0xFF0e0e0e)])))),
+                ? Positioned.fill(child: Image.network(art.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container(color: AppColors.pureBlack)))
+                : Container(color: AppColors.textSubtle),
+            Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, AppColors.appBackground])))),
             Positioned(
               top: 20,
               left: 20,
               child: Wrap(
                 spacing: 8,
                 children: [
-                  _badge("LATEST NEWS", widget.primaryColor, Colors.black),
-                  ...art.topics.map((t) => _badge(t, Colors.white, Colors.black)),
+                  _badge("LATEST NEWS", widget.primaryColor, AppColors.pureBlack),
+                  ...art.topics.map((t) => _badge(t, AppColors.textMain, AppColors.pureBlack)),
                 ],
               ),
             ),
             Positioned(bottom: 40, left: 40, right: 40, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text("${art.source}  •  ${timeAgo(art.pubDate).toUpperCase()}", style: const TextStyle(fontSize: 10, color: Colors.white54, letterSpacing: 2)),
+              // HERO DATE ROW
+              Row(
+                children: [
+                  Text(art.source.toUpperCase(), style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                  const SizedBox(width: 12),
+                  const Icon(FontAwesomeIcons.solidCalendarDays, size: 8, color: AppColors.textSubtle),
+                  const SizedBox(width: 6),
+                  Text(getFormattedArticleDate(art.pubDate).toUpperCase(), style: const TextStyle(fontSize: 10, color: AppColors.textMuted, letterSpacing: 1.5)),
+                ],
+              ),
               const SizedBox(height: 12),
-              Text(art.title, style: GoogleFonts.spaceGrotesk(fontSize: 32, fontWeight: FontWeight.bold, height: 1.1, fontStyle: FontStyle.italic)),
+              Text(art.title, style: GoogleFonts.spaceGrotesk(fontSize: 32, fontWeight: FontWeight.bold, height: 1.1, fontStyle: FontStyle.italic, color: AppColors.textMain)),
             ])),
           ],
         ),
@@ -498,6 +606,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
+  /// UI: Standard Article Card Widget
   Widget _buildArticleCard(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
@@ -505,20 +614,36 @@ class _NewsDashboardState extends State<NewsDashboard> {
         AspectRatio(
           aspectRatio: 16 / 9,
           child: Container(
-            decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: Colors.white10)),
+            decoration: BoxDecoration(color: AppColors.appSurface, border: Border.all(color: AppColors.borderSubtle)),
             child: art.thumbnail.isNotEmpty 
-              ? Image.network(art.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(FontAwesomeIcons.satelliteDish))
-              : const Center(child: Icon(FontAwesomeIcons.satelliteDish)),
+              ? Image.network(art.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle))
+              : const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle)),
           ),
         ),
         const SizedBox(height: 16),
-        Text(art.source, style: TextStyle(color: widget.primaryColor, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        // CARD DATE ROW
+        Row(
+          children: [
+            Icon(FontAwesomeIcons.calendarDay, size: 9, color: widget.primaryColor.withAlpha(150)),
+            const SizedBox(width: 8),
+            Text(
+              getFormattedArticleDate(art.pubDate).toUpperCase(),
+              style: const TextStyle(fontSize: 9, color: AppColors.textSubtle, fontWeight: FontWeight.bold, letterSpacing: 1),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
-        Text(art.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(art.source, style: TextStyle(color: widget.primaryColor, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+        const SizedBox(height: 8),
+        Text(art.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 18, fontWeight: FontWeight.bold, height: 1.3, color: AppColors.textMain)),
+        const SizedBox(height: 8),
+        // THIS IS THE RESTORED SUMMARY TEXT!
+        Text(art.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.5)),
       ]),
     );
   }
 
+  /// UI: Label helper
   Widget _badge(String text, Color bg, Color textCol) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -527,16 +652,16 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: Sidebar Settings Drawer
+  /// UI: Settings Drawer
   Widget _buildSidebar() {
     return Drawer(
-      backgroundColor: const Color(0xFF131313),
+      backgroundColor: AppColors.appSurface,
       child: Column(
         children: [
           const SizedBox(height: 60),
           Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Row(children: [Icon(FontAwesomeIcons.gear, size: 14, color: widget.primaryColor), const SizedBox(width: 12), Text("CONTROL PANEL", style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold, letterSpacing: 2))]),
+            child: Row(children: [Icon(FontAwesomeIcons.gear, size: 14, color: widget.primaryColor), const SizedBox(width: 12), Text("CONTROL PANEL", style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold, letterSpacing: 2, color: AppColors.textMain))]),
           ),
           Expanded(
             child: ListView(
@@ -559,17 +684,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
+  /// UI: Extended coverage toggle
   Widget _buildExtendedToggle() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(border: Border.all(color: Colors.white10), color: Colors.white.withAlpha(5)),
+      decoration: BoxDecoration(border: Border.all(color: AppColors.borderSubtle), color: AppColors.highlightOverlay),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("EXTENDED COVERAGE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+              const Text("EXTENDED COVERAGE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1, color: AppColors.textMain)),
               Switch(
                 value: isExtendedCoverageEnabled,
                 activeThumbColor: widget.primaryColor,
@@ -580,7 +706,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
           const SizedBox(height: 8),
           const Text(
             "Broaden the signal to include independent investigative reporting and broad-perspective analysis.",
-            style: TextStyle(fontSize: 11, color: Colors.white54, height: 1.4),
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.4),
           ),
         ],
       ),
@@ -588,22 +714,24 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _sidebarSectionTitle(IconData icon, String title) {
-    return Row(children: [Icon(icon, size: 10, color: Colors.white38), const SizedBox(width: 10), Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2, color: Colors.white38))]);
+    return Row(children: [Icon(icon, size: 10, color: AppColors.textSubtle), const SizedBox(width: 10), Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2, color: AppColors.textSubtle))]);
   }
 
+  /// UI: Theme palette selection
   Widget _buildThemePicker() {
-    List<Color> themes = [const Color(0xFFf59e0b), const Color(0xFFf43f5e), const Color(0xFF8b5cf6), const Color(0xFF6366f1), const Color(0xFF3b82f6), const Color(0xFF10b981)];
     return Wrap(
       spacing: 10, runSpacing: 10, 
-      children: themes.map((color) => GestureDetector(
+      // Loops through our new Centralized AppColors list
+      children: AppColors.allThemes.map((color) => GestureDetector(
         onTap: () => widget.onThemeChanged(color), 
-        child: Container(width: 40, height: 40, decoration: BoxDecoration(color: color, border: Border.all(color: widget.primaryColor == color ? Colors.white : Colors.transparent, width: 2)))
+        child: Container(width: 40, height: 40, decoration: BoxDecoration(color: color, border: Border.all(color: widget.primaryColor == color ? AppColors.textMain : Colors.transparent, width: 2)))
       )).toList()
     );
   }
 
+  /// UI: Topic filter tabs
   Widget _buildTopicFilters() {
     List<String> topics = ["ALL", ...topicConfig.keys];
-    return Column(children: topics.map((t) => Padding(padding: const EdgeInsets.only(bottom: 8.0), child: SizedBox(width: double.infinity, child: TextButton(onPressed: () => applyFilter(t), style: TextButton.styleFrom(alignment: Alignment.centerLeft, backgroundColor: currentFilter == t ? widget.primaryColor : Colors.transparent, shape: const RoundedRectangleBorder(), side: BorderSide(color: currentFilter == t ? widget.primaryColor : Colors.white10), padding: const EdgeInsets.all(16)), child: Text(t.toUpperCase(), style: TextStyle(color: currentFilter == t ? Colors.black : Colors.white60, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2)))))).toList());
+    return Column(children: topics.map((t) => Padding(padding: const EdgeInsets.only(bottom: 8.0), child: SizedBox(width: double.infinity, child: TextButton(onPressed: () => applyFilter(t), style: TextButton.styleFrom(alignment: Alignment.centerLeft, backgroundColor: currentFilter == t ? widget.primaryColor : Colors.transparent, shape: const RoundedRectangleBorder(), side: BorderSide(color: currentFilter == t ? widget.primaryColor : AppColors.borderSubtle), padding: const EdgeInsets.all(16)), child: Text(t.toUpperCase(), style: TextStyle(color: currentFilter == t ? AppColors.pureBlack : AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2)))))).toList());
   }
 }
