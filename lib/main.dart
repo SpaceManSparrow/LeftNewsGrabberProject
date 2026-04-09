@@ -336,9 +336,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
       String dateOnly = DateFormat('dd/MM/yyyy').format(postDate);
       if (diff.inDays <= 3) {
         String relative;
-        if (diff.inMinutes < 60) relative = "${diff.inMinutes}m ago";
-        else if (diff.inHours < 24) relative = "${diff.inHours}h ago";
-        else relative = "${diff.inDays} ${diff.inDays == 1 ? 'day' : 'days'} ago";
+        if (diff.inMinutes < 60) {
+          relative = "${diff.inMinutes}m ago";
+        } else if (diff.inHours < 24) {relative = "${diff.inHours}h ago";}
+        else {relative = "${diff.inDays} ${diff.inDays == 1 ? 'day' : 'days'} ago";}
         return "$relative ($dateOnly)";
       }
       return dateOnly;
@@ -618,7 +619,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withValues(alpha: 0.5),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, size: 16, color: Colors.white),
@@ -667,12 +668,15 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: REGULAR ARTICLE TILE
+  /// UI: REGULAR ARTICLE TILE (Fixed with Topics)
   Widget _buildArticleCard(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
       child: Container(
-        decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.borderSubtle)),
+        decoration: BoxDecoration(
+          color: AppColors.tileBackground, 
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, 
           children: [
@@ -694,10 +698,24 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     children: [
                       Icon(FontAwesomeIcons.calendarDay, size: 9, color: widget.primaryColor.withAlpha(150)),
                       const SizedBox(width: 8),
-                      Text(getFormattedArticleDate(art.pubDate).toUpperCase(), style: const TextStyle(fontSize: 9, color: AppColors.textSubtle, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                      Text(
+                        getFormattedArticleDate(art.pubDate).toUpperCase(),
+                        style: const TextStyle(fontSize: 9, color: AppColors.textSubtle, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
+                  
+                  // ADDED: Topic Badges for regular tiles
+                  if (art.topics.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: art.topics.map((t) => _badge(t, AppColors.highlightOverlay, AppColors.textMain)).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
                   Text(art.source, style: TextStyle(color: widget.primaryColor, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
                   const SizedBox(height: 8),
                   SizedBox(
@@ -709,7 +727,9 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     height: 40, 
                     child: Text(
                       art.description.isEmpty ? "No summary available." : art.description, 
-                      maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.5)
+                      maxLines: 2, 
+                      overflow: TextOverflow.ellipsis, 
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.5)
                     ),
                   ),
                 ],
