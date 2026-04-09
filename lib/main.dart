@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:async'; // Required for Auto-Scroll Timers
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
@@ -9,9 +9,8 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// ===========================================================================
-/// 1. CENTRALIZED DESIGN SYSTEM (AppColors)
+/// 1. CENTRALIZED DESIGN SYSTEM
 /// ===========================================================================
-/// We keep all design constants here so the UI code stays clean.
 class AppColors {
   static const Color appBackground = Color(0xFF0e0e0e); 
   static const Color appSurface = Color(0xFF131313); 
@@ -30,9 +29,8 @@ class AppColors {
 }
 
 /// ===========================================================================
-/// 2. APP CONFIGURATION (AppConfig)
+/// 2. APP CONFIGURATION
 /// ===========================================================================
-/// Separating Data (URLs/Keywords) from Logic (Functions).
 class AppConfig {
   static const Map<String, String> coreSources = {
     "https://ancomfed.org/picket-line/feed": "PICKET LINE",
@@ -83,7 +81,7 @@ class AppConfig {
 void main() => runApp(const TheRadicalApp());
 
 /// ===========================================================================
-/// 3. ROOT WIDGET (Persistence & Initialization)
+/// 3. ROOT WIDGET
 /// ===========================================================================
 class TheRadicalApp extends StatefulWidget {
   const TheRadicalApp({super.key});
@@ -94,7 +92,6 @@ class TheRadicalApp extends StatefulWidget {
 class _TheRadicalAppState extends State<TheRadicalApp> {
   Color primaryColor = AppColors.themeChoices[0];
 
-  /// MEMORY: Ensure settings load from the browser before drawing anything.
   Future<void> _initApp() async {
     final prefs = await SharedPreferences.getInstance();
     final int? colorValue = prefs.getInt('theme_color');
@@ -133,7 +130,7 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
 }
 
 /// ===========================================================================
-/// 4. DATA MODEL (Article)
+/// 4. DATA MODEL
 /// ===========================================================================
 class Article {
   final String title, link, pubDate, description, source, thumbnail;
@@ -161,7 +158,7 @@ class Article {
 }
 
 /// ===========================================================================
-/// 5. MAIN DASHBOARD (Logic & UI)
+/// 5. MAIN DASHBOARD LOGIC
 /// ===========================================================================
 class NewsDashboard extends StatefulWidget {
   final Color primaryColor;
@@ -185,6 +182,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
   int _heroIndex = 0;
   Timer? _autoScrollTimer;
 
+  // PROGRESS INDICATOR VARIABLES
+  int _totalSources = 0;
+  int _completedSources = 0;
+  String _statusMessage = "Initializing...";
+
   @override
   void initState() {
     super.initState();
@@ -204,20 +206,28 @@ class _NewsDashboardState extends State<NewsDashboard> {
     _fetchNews();
   }
 
-  /// THE FEED ENGINE: Deep Scans and Deduplication
+  /// THE ENHANCED PARALLEL LOADER
+  /// This fetches everything at once and tracks progress.
   Future<void> _fetchNews() async {
-    setState(() => _isLoading = true);
-    List<Article> results = [];
-    Set<String> seenLinks = {};
+    setState(() {
+      _isLoading = true;
+      _completedSources = 0;
+      _statusMessage = "Connecting to Signal...";
+    });
 
     final sources = Map.from(AppConfig.coreSources)..addAll(AppConfig.globalSources);
     if (_extendedMode) sources.addAll(AppConfig.extendedSources);
 
-    for (var entry in sources.entries) {
+    _totalSources = sources.length;
+    List<Article> results = [];
+    Set<String> seenLinks = {};
+
+    // Create a list of fetching tasks (Futures)
+    List<Future<void>> tasks = sources.entries.map((entry) async {
       try {
         final response = await http.get(Uri.parse(
           'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(entry.key)}'
-        )).timeout(const Duration(seconds: 10));
+        )).timeout(const Duration(seconds: 12)); // 12 second limit per source
 
         if (response.statusCode == 200) {
           final items = json.decode(response.body)['items'] as List;
@@ -230,7 +240,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
               if (!AppConfig.auKeywords.any((k) => content.contains(k))) continue;
             }
 
-            // Priority Tagging: Check publisher categories against our keywords
+            // Tagging Logic
             List<String> tags = [];
             List cats = item['categories'] ?? [];
             for (var c in cats) {
@@ -240,7 +250,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 }
               });
             }
-            // Fallback body scan
             if (tags.isEmpty) {
               AppConfig.topics.forEach((name, keywords) {
                 if (keywords.any((k) => content.contains(k))) {
@@ -251,10 +260,24 @@ class _NewsDashboardState extends State<NewsDashboard> {
             results.add(Article.fromJson(item, entry.value, tags));
           }
         }
-      } catch (e) { debugPrint("Skipping ${entry.value}"); }
-    }
+      } catch (e) {
+        debugPrint("Skipped ${entry.value}: $e");
+      } finally {
+        // Every time a source finishes (even if it fails), update progress
+        if (mounted) {
+          setState(() {
+            _completedSources++;
+            _statusMessage = "Fetching Signals from ${entry.value}...";
+          });
+        }
+      }
+    }).toList();
+
+    // Run all tasks in parallel
+    await Future.wait(tasks);
 
     results.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+    
     if (mounted) {
       setState(() {
         _allArticles = results;
@@ -285,7 +308,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
   void _startCarousel() {
     _autoScrollTimer?.cancel();
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 5), (t) {
-      if (_heroController.hasClients) {
+      if (_heroController.hasClients && _displayList.length >= 3) {
         int next = (_heroIndex + 1) % 3;
         _heroController.animateToPage(next, duration: const Duration(milliseconds: 800), curve: Curves.easeInOut);
       }
@@ -464,7 +487,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
       padding: const EdgeInsets.all(32),
       child: GridView.builder(
         shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, crossAxisSpacing: 30, mainAxisSpacing: 30, childAspectRatio: 0.85),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, crossAxisSpacing: 30, mainAxisSpacing: 40, childAspectRatio: 0.85),
         itemCount: _displayList.length > 3 ? _displayList.length - 3 : 0,
         itemBuilder: (c, i) => _articleCard(_displayList[i + 3]),
       ),
@@ -479,7 +502,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(aspectRatio: 16 / 9, child: Container(color: Colors.black26, child: a.thumbnail.isNotEmpty ? Image.network(a.thumbnail, fit: BoxFit.cover) : const Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle))),
+            AspectRatio(aspectRatio: 16 / 9, child: Container(color: Colors.black26, child: a.thumbnail.isNotEmpty ? Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(FontAwesomeIcons.satelliteDish)) : const Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle))),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -529,8 +552,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return SwitchListTile(
       title: const Text("EXTENDED COVERAGE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
       subtitle: const Text("Include broader independent sources.", style: TextStyle(fontSize: 10)),
-      value: _extendedMode, 
-      activeThumbColor: widget.primaryColor, // Fixed Deprecation
+      value: _extendedMode, activeThumbColor: widget.primaryColor,
       onChanged: (v) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('extended_coverage', v);
@@ -541,8 +563,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _themePicker() {
-    return Wrap(spacing: 10, runSpacing: 10, children: AppColors.themeChoices.map((c) => GestureDetector(onTap: () => widget.onThemeChanged(c), child: Container(width: 35, height: 35, decoration: BoxDecoration(color: c, border: Border.all(color: widget.primaryColor == c ? Colors.white : Colors.transparent, width: 2))))).toList());
+    return Wrap(spacing: 10, runSpacing: 10, children: AppColors.themeChoices.map((c) => GestureDetector(onTap: () => widget.onThemeChanged(c), child: Container(width: 35, height: 35, decoration: BoxDecoration(color: c, border: Border.all(color: widget.primaryColor == colorValue(c) ? Colors.white : Colors.transparent, width: 2))))).toList());
   }
+
+  // Helper to compare colors accurately
+  Color colorValue(Color c) => c;
 
   Widget _topicList() {
     final t = ["ALL", ...AppConfig.topics.keys];
@@ -551,6 +576,25 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   Widget _badge(String t, Color bg, Color tc) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), color: bg, child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold)));
   Widget _arrow(IconData i, VoidCallback o) => GestureDetector(onTap: () { _manualInterruption(); o(); }, child: Container(padding: const EdgeInsets.all(10), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: Icon(i, size: 16)));
-  Widget _loader() => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [CircularProgressIndicator(color: widget.primaryColor), const SizedBox(height: 20), const Text("FETCHING ARTICLES...", style: TextStyle(fontSize: 10, letterSpacing: 2))]));
+  
+  /// UI: PROGRESS LOADER
+  Widget _loader() {
+    double progress = _totalSources > 0 ? _completedSources / _totalSources : 0;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(value: progress, color: widget.primaryColor, strokeWidth: 6),
+          const SizedBox(height: 30),
+          Text("${(progress * 100).toInt()}%", style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          Text("SCRAPING SIGNALS...", style: TextStyle(color: widget.primaryColor, fontSize: 10, letterSpacing: 4)),
+          const SizedBox(height: 20),
+          Text(_statusMessage.toUpperCase(), style: const TextStyle(color: AppColors.textSubtle, fontSize: 9, letterSpacing: 1)),
+        ],
+      ),
+    );
+  }
+
   Widget _emptyState() => const Center(child: Text("NO SIGNALS FOUND"));
 }
