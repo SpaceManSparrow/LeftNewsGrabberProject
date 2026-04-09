@@ -13,6 +13,12 @@ A news aggregator designed to centralise reporting from Australian political and
 - [RSS2JSON](https://rss2json.com/) - API for feed conversion
 - [Google Fonts](https://fonts.google.com/) - Space Grotesk & Manrope
 
+## 🐞 Known Issues & Bugs
+- **Incomplete metadata (images) causing missing images on articles**
+
+## 📝 To-Do / Roadmap
+- **Fix Images for All Articles** 
+
 ## 📖 About the Project
 The Radical was created to centralise news from a leftist perspective without needing to manually check dozens of separate sources.
 
