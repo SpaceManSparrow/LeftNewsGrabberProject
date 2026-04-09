@@ -93,7 +93,6 @@ class TheRadicalApp extends StatefulWidget {
 class _TheRadicalAppState extends State<TheRadicalApp> {
   Color primaryColor = AppColors.themeChoices[0];
 
-  /// MEMORY: Load saved settings before the app builds its first frame
   Future<void> _initApp() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -136,8 +135,15 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
 }
 
 /// ===========================================================================
-/// 4. ARTICLE DATA MODEL
+/// 4. ARTICLE DATA MODEL (FIXED WITH PROXY & DESCRIPTION CLEANING)
 /// ===========================================================================
+
+/// HELPER: Forces images through a CORS proxy
+String _wrapProxy(String url) {
+  if (url.isEmpty || url.startsWith('https://images.weserv.nl')) return url;
+  return "https://images.weserv.nl/?url=${Uri.encodeComponent(url)}&w=800&fit=cover";
+}
+
 class Article {
   final String title, link, pubDate, description, source, thumbnail;
   final DateTime parsedDate;
@@ -150,14 +156,36 @@ class Article {
   });
 
   factory Article.fromJson(Map<String, dynamic> json, String sourceName, List<String> detectedTopics) {
+    String rawDesc = json['description'] ?? '';
+    String foundThumb = json['thumbnail'] ?? '';
+
+    // If thumbnail is missing, try to scrape it from the description HTML
+    if (foundThumb.isEmpty || foundThumb.contains('favicon')) {
+      RegExp imgExp = RegExp(r'<img[^>]+src="([^">]+)"');
+      Iterable<RegExpMatch> matches = imgExp.allMatches(rawDesc);
+      if (matches.isNotEmpty) {
+        foundThumb = matches.first.group(1) ?? '';
+      }
+    }
+
+    // FIX A: Apply Proxy to the thumbnail immediately
+    String proxiedThumb = _wrapProxy(foundThumb);
+
+    // FIX B: Clean description by specifically targeting <img> tags first (kills trackers)
+    String cleanDescription = rawDesc
+        .replaceAll(RegExp(r'<img[^>]*>'), '') // Removes tracking pixels/embedded images
+        .replaceAll(RegExp(r'<[^>]*>'), '')    // Removes all other HTML tags
+        .replaceAll('&nbsp;', ' ')
+        .trim();
+
     return Article(
       title: json['title'] ?? '',
       link: json['link'] ?? '',
       parsedDate: DateTime.tryParse(json['pubDate'] ?? '') ?? DateTime.now(),
       pubDate: json['pubDate'] ?? '',
-      description: (json['description'] as String).replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ').trim(),
+      description: cleanDescription,
       source: sourceName,
-      thumbnail: json['thumbnail'] ?? '',
+      thumbnail: proxiedThumb,
       topics: detectedTopics,
     );
   }
@@ -215,7 +243,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
     _fetchNews();
   }
 
-  /// STABLE FETCH ENGINE
   Future<void> _fetchNews() async {
     if (!mounted) return;
     setState(() {
@@ -255,7 +282,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 if (!AppConfig.auKeywords.any((k) => content.contains(k))) continue;
               }
 
-              // Deep Scan Tagging
               List<String> tags = [];
               List cats = item['categories'] ?? [];
               for (var c in cats) {
@@ -356,10 +382,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
       ),
     );
   }
-
-  /// ===========================================================================
-  /// UI COMPONENTS
-  /// ===========================================================================
 
   Widget _fixedTopSection(double width) {
     return Column(
