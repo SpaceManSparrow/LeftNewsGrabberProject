@@ -17,7 +17,6 @@ class AppColors {
   static const Color tileBackground = Color(0xFF151515); 
   static const Color borderSubtle = Colors.white10; 
   static const Color highlightOverlay = Color(0x0DFFFFFF); 
-
   static const Color textMain = Colors.white; 
   static const Color textMuted = Colors.white54; 
   static const Color textSubtle = Colors.white38; 
@@ -81,7 +80,7 @@ class AppConfig {
 void main() => runApp(const TheRadicalApp());
 
 /// ===========================================================================
-/// 3. ROOT WIDGET
+/// 3. ROOT WIDGET (Persistence)
 /// ===========================================================================
 class TheRadicalApp extends StatefulWidget {
   const TheRadicalApp({super.key});
@@ -93,15 +92,24 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
   Color primaryColor = AppColors.themeChoices[0];
 
   Future<void> _initApp() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int? colorValue = prefs.getInt('theme_color');
-    if (colorValue != null) primaryColor = Color(colorValue);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final int? colorValue = prefs.getInt('theme_color');
+      if (colorValue != null) primaryColor = Color(colorValue);
+    } catch (e) {
+      // SAFETY: If persistence fails, the app will still start with default color
+      debugPrint("Persistence Error: $e");
+    }
   }
 
   void updateTheme(Color newColor) async {
     setState(() => primaryColor = newColor);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('theme_color', newColor.toARGB32());
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('theme_color', newColor.toARGB32());
+    } catch (e) {
+      debugPrint("Save Theme Error: $e");
+    }
   }
 
   @override
@@ -109,9 +117,6 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
     return FutureBuilder(
       future: _initApp(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Container(color: AppColors.appBackground);
-        }
         return MaterialApp(
           title: 'The Radical',
           debugShowCheckedModeBanner: false,
@@ -182,10 +187,9 @@ class _NewsDashboardState extends State<NewsDashboard> {
   int _heroIndex = 0;
   Timer? _autoScrollTimer;
 
-  // PROGRESS INDICATOR VARIABLES
   int _totalSources = 0;
   int _completedSources = 0;
-  String _statusMessage = "Initializing...";
+  String _statusMessage = "Starting...";
 
   @override
   void initState() {
@@ -201,18 +205,21 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Future<void> _bootSequence() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _extendedMode = prefs.getBool('extended_coverage') ?? false);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _extendedMode = prefs.getBool('extended_coverage') ?? false;
+    } catch (e) {
+      debugPrint("Toggle Load Error: $e");
+    }
     _fetchNews();
   }
 
-  /// THE ENHANCED PARALLEL LOADER
-  /// This fetches everything at once and tracks progress.
   Future<void> _fetchNews() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _completedSources = 0;
-      _statusMessage = "Connecting to Signal...";
+      _statusMessage = "Dialing signals...";
     });
 
     final sources = Map.from(AppConfig.coreSources)..addAll(AppConfig.globalSources);
@@ -222,58 +229,58 @@ class _NewsDashboardState extends State<NewsDashboard> {
     List<Article> results = [];
     Set<String> seenLinks = {};
 
-    // Create a list of fetching tasks (Futures)
     List<Future<void>> tasks = sources.entries.map((entry) async {
+      await Future.delayed(Duration(milliseconds: 100)); // Stagger to avoid blocks
       try {
         final response = await http.get(Uri.parse(
           'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(entry.key)}'
-        )).timeout(const Duration(seconds: 12)); // 12 second limit per source
+        )).timeout(const Duration(seconds: 15));
 
         if (response.statusCode == 200) {
-          final items = json.decode(response.body)['items'] as List;
-          for (var item in items) {
-            if (seenLinks.contains(item['link'])) continue;
-            seenLinks.add(item['link']);
+          final data = json.decode(response.body);
+          if (data['status'] == 'ok') {
+            final items = data['items'] as List;
+            for (var item in items) {
+              if (seenLinks.contains(item['link'])) continue;
+              seenLinks.add(item['link']);
 
-            String content = "${item['title']} ${item['description']}".toLowerCase();
-            if (AppConfig.globalSources.containsValue(entry.value)) {
-              if (!AppConfig.auKeywords.any((k) => content.contains(k))) continue;
-            }
+              String content = "${item['title']} ${item['description']}".toLowerCase();
+              if (AppConfig.globalSources.containsValue(entry.value)) {
+                if (!AppConfig.auKeywords.any((k) => content.contains(k))) continue;
+              }
 
-            // Tagging Logic
-            List<String> tags = [];
-            List cats = item['categories'] ?? [];
-            for (var c in cats) {
-              AppConfig.topics.forEach((name, keywords) {
-                if (keywords.any((k) => c.toString().toLowerCase().contains(k))) {
-                  if (!tags.contains(name)) tags.add(name);
-                }
-              });
+              List<String> tags = [];
+              List cats = item['categories'] ?? [];
+              for (var c in cats) {
+                AppConfig.topics.forEach((name, keywords) {
+                  if (keywords.any((k) => c.toString().toLowerCase().contains(k))) {
+                    if (!tags.contains(name)) tags.add(name);
+                  }
+                });
+              }
+              if (tags.isEmpty) {
+                AppConfig.topics.forEach((name, keywords) {
+                  if (keywords.any((k) => content.contains(k))) {
+                    if (!tags.contains(name)) tags.add(name);
+                  }
+                });
+              }
+              results.add(Article.fromJson(item, entry.value, tags));
             }
-            if (tags.isEmpty) {
-              AppConfig.topics.forEach((name, keywords) {
-                if (keywords.any((k) => content.contains(k))) {
-                  if (!tags.contains(name)) tags.add(name);
-                }
-              });
-            }
-            results.add(Article.fromJson(item, entry.value, tags));
           }
         }
       } catch (e) {
-        debugPrint("Skipped ${entry.value}: $e");
+        debugPrint("Network Error: ${entry.value}");
       } finally {
-        // Every time a source finishes (even if it fails), update progress
         if (mounted) {
           setState(() {
             _completedSources++;
-            _statusMessage = "Fetching Signals from ${entry.value}...";
+            _statusMessage = "Receiving: ${entry.value}";
           });
         }
       }
     }).toList();
 
-    // Run all tasks in parallel
     await Future.wait(tasks);
 
     results.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
@@ -307,17 +314,13 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   void _startCarousel() {
     _autoScrollTimer?.cancel();
+    if (_displayList.length < 3) return;
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 5), (t) {
-      if (_heroController.hasClients && _displayList.length >= 3) {
+      if (_heroController.hasClients) {
         int next = (_heroIndex + 1) % 3;
         _heroController.animateToPage(next, duration: const Duration(milliseconds: 800), curve: Curves.easeInOut);
       }
     });
-  }
-
-  void _manualInterruption() {
-    _autoScrollTimer?.cancel();
-    Timer(const Duration(seconds: 15), () => _startCarousel());
   }
 
   String _formatDate(String d) {
@@ -502,7 +505,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(aspectRatio: 16 / 9, child: Container(color: Colors.black26, child: a.thumbnail.isNotEmpty ? Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(FontAwesomeIcons.satelliteDish)) : const Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle))),
+            AspectRatio(aspectRatio: 16 / 9, child: Container(color: Colors.black26, child: a.thumbnail.isNotEmpty ? Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(FontAwesomeIcons.satelliteDish)) : const Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle))),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -554,8 +557,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
       subtitle: const Text("Include broader independent sources.", style: TextStyle(fontSize: 10)),
       value: _extendedMode, activeThumbColor: widget.primaryColor,
       onChanged: (v) async {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('extended_coverage', v);
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('extended_coverage', v);
+        } catch (e) {}
         setState(() => _extendedMode = v);
         _fetchNews();
       },
@@ -563,11 +568,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _themePicker() {
-    return Wrap(spacing: 10, runSpacing: 10, children: AppColors.themeChoices.map((c) => GestureDetector(onTap: () => widget.onThemeChanged(c), child: Container(width: 35, height: 35, decoration: BoxDecoration(color: c, border: Border.all(color: widget.primaryColor == colorValue(c) ? Colors.white : Colors.transparent, width: 2))))).toList());
+    return Wrap(spacing: 10, runSpacing: 10, children: AppColors.themeChoices.map((c) => GestureDetector(onTap: () => widget.onThemeChanged(c), child: Container(width: 35, height: 35, decoration: BoxDecoration(color: c, border: Border.all(color: widget.primaryColor == c ? Colors.white : Colors.transparent, width: 2))))).toList());
   }
-
-  // Helper to compare colors accurately
-  Color colorValue(Color c) => c;
 
   Widget _topicList() {
     final t = ["ALL", ...AppConfig.topics.keys];
@@ -575,20 +577,19 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _badge(String t, Color bg, Color tc) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), color: bg, child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold)));
-  Widget _arrow(IconData i, VoidCallback o) => GestureDetector(onTap: () { _manualInterruption(); o(); }, child: Container(padding: const EdgeInsets.all(10), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: Icon(i, size: 16)));
+  Widget _arrow(IconData i, VoidCallback o) => GestureDetector(onTap: o, child: Container(padding: const EdgeInsets.all(10), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: Icon(i, size: 16)));
   
-  /// UI: PROGRESS LOADER
   Widget _loader() {
     double progress = _totalSources > 0 ? _completedSources / _totalSources : 0;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(value: progress, color: widget.primaryColor, strokeWidth: 6),
+          CircularProgressIndicator(value: (progress == 0) ? null : progress, color: widget.primaryColor, strokeWidth: 6),
           const SizedBox(height: 30),
           Text("${(progress * 100).toInt()}%", style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-          Text("SCRAPING SIGNALS...", style: TextStyle(color: widget.primaryColor, fontSize: 10, letterSpacing: 4)),
+          Text("RECEIVING SIGNALS...", style: TextStyle(color: widget.primaryColor, fontSize: 10, letterSpacing: 4)),
           const SizedBox(height: 20),
           Text(_statusMessage.toUpperCase(), style: const TextStyle(color: AppColors.textSubtle, fontSize: 9, letterSpacing: 1)),
         ],
