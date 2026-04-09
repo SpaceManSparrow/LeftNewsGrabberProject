@@ -1,4 +1,4 @@
-# 🚩 The Radical | News Dashboard
+# The Radical | News Dashboard
 
 A news aggregator designed to centralise reporting from Australian political and social perspectives. 
 
@@ -14,7 +14,9 @@ A news aggregator designed to centralise reporting from Australian political and
 - [Google Fonts](https://fonts.google.com/) - Space Grotesk & Manrope
 
 ## 📖 About the Project
-The Radical is designed for tracking material and economic realities without having to manually check dozens of sources every day. It focuses on labor movements, internationalism, and anti-fascist reporting.
+The Radical was created to centralise news from a leftist perspective without needing to manually check dozens of separate sources.
+
+I am still very new to programming and this project also acts as a learning tool for me to learn Flutter. I am using AI to assist me and this is evident to anyone who parusses the change log.
 
 ---
 *This website is currently in Beta.*
