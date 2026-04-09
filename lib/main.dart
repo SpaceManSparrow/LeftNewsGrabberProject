@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart'; // Browser memory
 class AppColors {
   static const Color appBackground = Color(0xFF0e0e0e); 
   static const Color appSurface = Color(0xFF131313); 
-  static const Color tileBackground = Color(0xFF151515); // NEW: Tile color for articles
+  static const Color tileBackground = Color(0xFF151515); 
   static const Color borderSubtle = Colors.white10; 
   static const Color glassOverlay = Color(0xCC0E0E0E); 
   static const Color highlightOverlay = Color(0x0DFFFFFF); 
@@ -51,21 +51,11 @@ class TheRadicalApp extends StatefulWidget {
 class _TheRadicalAppState extends State<TheRadicalApp> {
   Color primaryColor = AppColors.themeAmber; 
 
-  @override
-  void initState() {
-    super.initState();
-    _loadSavedSettings();
-  }
-
-  Future<void> _loadSavedSettings() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final int? colorValue = prefs.getInt('theme_color');
-      if (colorValue != null) {
-        setState(() => primaryColor = Color(colorValue));
-      }
-    } catch (e) {
-      debugPrint("Memory load error: $e");
+  Future<void> _initApp() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? colorValue = prefs.getInt('theme_color');
+    if (colorValue != null) {
+      primaryColor = Color(colorValue);
     }
   }
 
@@ -77,19 +67,28 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'The Radical | News Dashboard',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppColors.appBackground,
-        primaryColor: primaryColor,
-        textTheme: GoogleFonts.manropeTextTheme(ThemeData.dark().textTheme),
-      ),
-      home: NewsDashboard(
-        primaryColor: primaryColor,
-        onThemeChanged: updateTheme,
-      ),
+    return FutureBuilder(
+      future: _initApp(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(color: AppColors.appBackground);
+        }
+        return MaterialApp(
+          title: 'The Radical | News Dashboard',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: AppColors.appBackground,
+            primaryColor: primaryColor,
+            colorScheme: ColorScheme.dark(primary: primaryColor),
+            textTheme: GoogleFonts.manropeTextTheme(ThemeData.dark().textTheme),
+          ),
+          home: NewsDashboard(
+            primaryColor: primaryColor,
+            onThemeChanged: updateTheme,
+          ),
+        );
+      }
     );
   }
 }
@@ -121,7 +120,10 @@ class Article {
       title: json['title'] ?? '',
       link: json['link'] ?? '',
       pubDate: json['pubDate'] ?? '',
-      description: (json['description'] as String).replaceAll(RegExp(r'<[^>]*>'), '').trim(),
+      description: (json['description'] as String)
+          .replaceAll(RegExp(r'<[^>]*>'), '')
+          .replaceAll('&nbsp;', ' ')
+          .trim(),
       source: sourceName,
       thumbnail: json['thumbnail'] ?? '',
       topics: detectedTopics,
@@ -130,7 +132,7 @@ class Article {
 }
 
 /// ===========================================================================
-/// 4. SOURCE CONFIGURATIONS
+/// 4. SOURCE CONFIGURATIONS & GEO-FILTERING
 /// ===========================================================================
 const Map<String, String> coreSources = {
   "https://ancomfed.org/picket-line/feed": "PICKET LINE",
@@ -145,7 +147,6 @@ const Map<String, String> coreSources = {
   "https://vanguard-cpaml.blogspot.com/rss.xml": "VANGUARD",
   "https://partisanmagazine.org/feed/": "PARTISAN!",
   "https://redantcollective.org/feed": "RED ANT",
-  "https://www.theguardian.com/australia-news/australian-trade-unions/rss": "THE GUARDIAN",
   "https://temokalati.wordpress.com/feed": "TEMOKALATI",
   "https://www.thenews.coop/country/oceania/feed": "CO-OP NEWS",
   "https://seqldiww.org/category/australia/feed": "IWW (SOUTH EAST QUEENSLAND)"
@@ -157,7 +158,9 @@ const Map<String, String> globalSources = {
 
 const Map<String, String> extendedSources = {
   "https://michaelwest.com.au/category/latest-posts/feed/": "MICHAEL WEST",
-  "http://feeds.feedburner.com/IndependentAustralia": "INDEPENDENT AUSTRALIA"
+  "http://feeds.feedburner.com/IndependentAustralia": "INDEPENDENT AUSTRALIA",
+  "https://theconversation.com/topics/australia-64/articles.atom": "THE CONVERSATION",
+  "https://www.theguardian.com/australia-news/australian-trade-unions/rss": "THE GUARDIAN"
 };
 
 const List<String> australianKeywords = [
@@ -166,12 +169,19 @@ const List<String> australianKeywords = [
   "tasmania", "albanese", "dutton", "nsw", "vic", "qld", "western australia"
 ];
 
+/// ===========================================================================
+/// TOPICS CONFIGURATION
+/// ===========================================================================
 const Map<String, List<String>> topicConfig = {
-  "Labour": ["strike", "union", "worker", "picket", "wage", "industrial", "cfmeu", "workplace", "unemployment", "labour", "fair work"],
-  "Middle East": ["gaza", "palestine", "israel", "occupation", "zionism", "rafah", "genocide", "iran", "tehran", "lebanon", "beirut", "yemen", "houthi"],
-  "Climate": ["climate", "environment", "warming", "coal", "gas", "emission", "green", "renewables"],
-  "International": ["imperialism", "china", "usa", "nato", "ukraine", "russia", "global", "war", "united states", "biden", "trump", "europe"],
-  "Anti-Fascism": ["fascism", "far-right", "nazi", "racism", "protest", "police", "surveillance"]
+  "ECONOMY": ["economy", "economic", "inflation", "cost of living", "tax", "wealth", "poverty", "rates", "reserve bank", "budget"],
+  "ENVIRONMENT": ["climate", "environment", "warming", "emissions", "coal", "gas", "renewables", "green", "forest", "logging"],
+  "FIRST NATIONS": ["first nations", "indigenous", "aboriginal", "torres strait", "treaty", "voice", "invasion day", "sovereignty"],
+  "INTERNATIONAL": ["international", "global", "war", "imperialism", "nato", "ukraine", "palestine", "gaza", "middle east", "china", "usa"],
+  "LABOUR": ["labour", "worker", "union", "strike", "industrial", "wage", "cfmeu", "workplace", "employment", "fair work"],
+  "MUTUAL AID": ["mutual aid", "solidarity", "community", "co-op", "cooperative", "grassroots", "support"],
+  "PARLIAMENT": ["parliament", "government", "senate", "election", "albanese", "dutton", "legislation", "policy", "bill"],
+  "PRAXIS": ["praxis", "protest", "activism", "organizing", "demonstration", "direct action", "movement", "resistance"],
+  "TECHNOLOGY": ["technology", "AI", "artificial intelligence", "surveillance", "privacy", "cyber", "internet", "digital", "automation"]
 };
 
 /// ===========================================================================
@@ -204,7 +214,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   void _startApp() async {
-    loadNews();
+    loadNews(); 
     try {
       final prefs = await SharedPreferences.getInstance();
       setState(() {
@@ -225,6 +235,9 @@ class _NewsDashboardState extends State<NewsDashboard> {
     loadNews();
   }
 
+  /// ===========================================================================
+  /// THE SMART LOADER: Implements Priority Tagging
+  /// ===========================================================================
   Future<void> loadNews() async {
     List<Article> allFetched = [];
     Map<String, String> activeSources = Map.from(coreSources);
@@ -244,20 +257,45 @@ class _NewsDashboardState extends State<NewsDashboard> {
           final data = json.decode(response.body);
           if (data['status'] == 'ok') {
             for (var item in data['items']) {
-              String contentToSearch = ((item['title'] ?? "") + " " + (item['description'] ?? "")).toLowerCase();
+              String title = item['title'] ?? "";
+              String description = item['description'] ?? "";
+              String contentToSearch = (title + " " + description).toLowerCase();
               
+              // GEOGRAPHIC FILTER (e.g. Jacobin)
               bool isGlobal = globalSources.containsValue(entry.value);
               if (isGlobal) {
-                bool containsAuKeywords = australianKeywords.any((keyword) => contentToSearch.contains(keyword));
-                if (!containsAuKeywords) continue; 
+                bool hasAuKeyword = australianKeywords.any((keyword) => contentToSearch.contains(keyword));
+                if (!hasAuKeyword) continue; 
               }
 
-              List<String> topics = [];
-              topicConfig.forEach((key, keywords) {
-                if (keywords.any((kw) => contentToSearch.contains(kw))) topics.add(key);
-              });
+              /// --- START PRIORITY TAGGING LOGIC ---
+              List<String> detectedTopics = [];
+              List<dynamic> rawPublisherTags = item['categories'] ?? [];
+
+              // Priority 1: Check existing publisher tags against our topicConfig
+              if (rawPublisherTags.isNotEmpty) {
+                for (var rawTag in rawPublisherTags) {
+                  String tag = rawTag.toString().toUpperCase();
+                  topicConfig.forEach((topicName, keywords) {
+                    // Check if tag is an exact match for our topic OR matches our keywords
+                    if (tag == topicName || keywords.any((kw) => tag.contains(kw.toUpperCase()))) {
+                      if (!detectedTopics.contains(topicName)) detectedTopics.add(topicName);
+                    }
+                  });
+                }
+              }
+
+              // Priority 2: Fallback to keyword scanning (if no publisher tags matched)
+              if (detectedTopics.isEmpty) {
+                topicConfig.forEach((topicName, keywords) {
+                  if (keywords.any((kw) => contentToSearch.contains(kw.toLowerCase()))) {
+                    if (!detectedTopics.contains(topicName)) detectedTopics.add(topicName);
+                  }
+                });
+              }
+              /// --- END PRIORITY TAGGING LOGIC ---
               
-              allFetched.add(Article.fromJson(item, entry.value, topics));
+              allFetched.add(Article.fromJson(item, entry.value, detectedTopics));
             }
           }
         }
@@ -273,7 +311,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         masterArticles = allFetched;
         filteredArticles = allFetched;
         isLoading = false; 
-        applyFilter(currentFilter);
+        applyFilter(currentFilter); 
       });
     }
   }
@@ -317,7 +355,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   /// ===========================================================================
-  /// 6. USER INTERFACE (BUILD)
+  /// 7. USER INTERFACE (BUILD)
   /// ===========================================================================
   @override
   Widget build(BuildContext context) {
@@ -327,15 +365,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return Scaffold(
       key: _scaffoldKey, 
       endDrawer: _buildSidebar(), 
-      // STICKY HEADER IMPLEMENTATION:
-      // We separate the 'Fixed' elements from the 'Scrollable' elements.
       body: Column(
         children: [
-          // FIXED AREA (Does not scroll)
           _buildBetaBanner(), 
           _buildHeaderWrapper(screenWidth), 
           
-          // SCROLLABLE AREA
           Expanded(
             child: ListView(
               children: [
@@ -372,7 +406,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        color: AppColors.appBackground, // Solid background so news doesn't show through
+        color: AppColors.appBackground, 
         border: Border(bottom: BorderSide(color: AppColors.borderSubtle)),
       ),
       child: Center(
@@ -497,8 +531,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
-              crossAxisSpacing: 30, // Space between tiles
-              mainAxisSpacing: 30,  // Space between rows
+              crossAxisSpacing: 30, 
+              mainAxisSpacing: 30, 
               childAspectRatio: 0.85, 
             ),
             itemCount: filteredArticles.length > 1 ? filteredArticles.length - 1 : 0,
@@ -550,14 +584,13 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  /// UI: REGULAR ARTICLE TILE
+  /// UI: REGULAR ARTICLE TILE (Fixed with Topics)
   Widget _buildArticleCard(Article art) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(art.link)),
       child: Container(
-        // NEW: Tile styling
         decoration: BoxDecoration(
-          color: AppColors.tileBackground, // The #333333 color
+          color: AppColors.tileBackground, 
           border: Border.all(color: AppColors.borderSubtle),
         ),
         child: Column(
@@ -572,7 +605,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
                   : const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle)),
               ),
             ),
-            // Internal Padding for the text inside the tile
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -589,6 +621,17 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     ],
                   ),
                   const SizedBox(height: 8),
+                  
+                  // ADDED: Topic Badges for regular tiles
+                  if (art.topics.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: art.topics.map((t) => _badge(t, AppColors.highlightOverlay, AppColors.textMain)).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
                   Text(art.source, style: TextStyle(color: widget.primaryColor, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
                   const SizedBox(height: 8),
                   SizedBox(
