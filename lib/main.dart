@@ -148,14 +148,14 @@ class Article {
     required this.thumbnail, required this.topics,
   });
 
-  /// SMART DATE PARSER: Handles RFC 822 (RSS) and ISO 8601 (Atom)
-  static DateTime parseRssDate(String dateString) {
+  /// SMART DATE PARSER: Handles RSS and Atom date formats correctly
+  static DateTime parseDate(String dateString) {
     if (dateString.isEmpty) return DateTime.now();
     DateTime? result = DateTime.tryParse(dateString);
     if (result != null) return result;
 
     try {
-      // Strips timezone offset (+0000) which DateFormat struggles with
+      // Strips offset (+0000) for standard RSS parsing
       String cleaned = dateString.split(' +').first.split(' -').first;
       return DateFormat("E, d MMM yyyy HH:mm:ss").parse(cleaned);
     } catch (_) {
@@ -191,7 +191,7 @@ class Article {
 }
 
 /// ===========================================================================
-/// 5. MAIN DASHBOARD LOGIC
+/// 5. MAIN DASHBOARD LOGIC (FAIL-PROOF FETCHING)
 /// ===========================================================================
 class NewsDashboard extends StatefulWidget {
   final Color primaryColor;
@@ -236,17 +236,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
     try {
       final prefs = await SharedPreferences.getInstance();
       setState(() => _extendedMode = prefs.getBool('extended_coverage') ?? false);
-    } catch (e) { debugPrint("Pref error: $e"); }
+    } catch (e) { debugPrint("Pref load error: $e"); }
     _fetchNews();
   }
 
+  /// SEQUENTIAL FETCH: Prevents 429 Rate Limiting by fetching one at a time
   Future<void> _fetchNews() async {
     if (!mounted) return;
     setState(() {
       _isLoading = true;
       _completedSources = 0;
       _allArticles = [];
-      _statusMessage = kIsWeb ? "Deploying Bridge..." : "Direct Link Established...";
+      _statusMessage = kIsWeb ? "Securing Bridge..." : "Connecting Direct...";
     });
 
     final sources = Map.from(AppConfig.coreSources)..addAll(AppConfig.globalSources);
@@ -256,17 +257,22 @@ class _NewsDashboardState extends State<NewsDashboard> {
     List<Article> results = [];
     Set<String> seenLinks = {};
 
-    int stagger = 0;
-    List<Future<void>> tasks = sources.entries.map((entry) async {
-      stagger += kIsWeb ? 200 : 50; 
-      await Future.delayed(Duration(milliseconds: stagger));
-      
+    // We loop through sources one-by-one to avoid triggering the proxy's rate limit
+    for (var entry in sources.entries) {
+      if (!mounted) break;
+
+      setState(() { _statusMessage = "Receiving: ${entry.value}"; });
+
       try {
-        String finalUrl = kIsWeb ? 'https://api.allorigins.win/get?url=${Uri.encodeComponent(entry.key)}' : entry.key;
-        final response = await http.get(Uri.parse(finalUrl)).timeout(const Duration(seconds: 15));
+        String finalUrl = kIsWeb 
+            ? 'https://corsproxy.io/?${Uri.encodeComponent(entry.key)}' 
+            : entry.key;
+
+        final response = await http.get(Uri.parse(finalUrl)).timeout(const Duration(seconds: 12));
 
         if (response.statusCode == 200) {
-          String rawXml = kIsWeb ? json.decode(response.body)['contents'] : response.body;
+          String rawXml = response.body;
+          
           final itemRegex = RegExp(r'<item>(.*?)</item>', dotAll: true);
           final atomRegex = RegExp(r'<entry>(.*?)</entry>', dotAll: true);
           
@@ -289,7 +295,9 @@ class _NewsDashboardState extends State<NewsDashboard> {
             if (AppConfig.globalSources.containsValue(entry.value) && !AppConfig.auKeywords.any((k) => searchable.contains(k))) continue;
 
             List<String> tags = [];
-            AppConfig.topics.forEach((name, keywords) { if (keywords.any((k) => searchable.contains(k))) { if (!tags.contains(name)) tags.add(name); } });
+            AppConfig.topics.forEach((name, keywords) { 
+              if (keywords.any((k) => searchable.contains(k))) { if (!tags.contains(name)) tags.add(name); } 
+            });
 
             String thumb = Article.scrapeImage(desc);
             if (thumb.isEmpty) thumb = RegExp(r'<media:content[^>]+url="(.*?)"').firstMatch(content)?.group(1) ?? '';
@@ -298,18 +306,31 @@ class _NewsDashboardState extends State<NewsDashboard> {
               title: title, link: link, source: entry.value, topics: tags,
               description: Article.cleanHtml(desc),
               thumbnail: Article.wrapProxy(thumb),
-              parsedDate: Article.parseRssDate(pubDateStr),
+              parsedDate: Article.parseDate(pubDateStr),
             ));
           }
         }
-      } catch (e) { debugPrint("Failure for ${entry.value}: $e"); }
-      finally { if (mounted) setState(() { _completedSources++; _statusMessage = "Receiving: ${entry.value}"; }); }
-    }).toList();
+      } catch (e) { 
+        debugPrint("Link failure for ${entry.value}: $e"); 
+      } finally {
+        if (mounted) setState(() { _completedSources++; });
+      }
+      
+      // Small breathing room between requests to ensure we don't look like a bot
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
 
-    await Future.wait(tasks);
     results.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
     
-    if (mounted) setState(() { _allArticles = results; _displayList = results; _isLoading = false; _applyLogic(); _startCarousel(); });
+    if (mounted) {
+      setState(() { 
+        _allArticles = results; 
+        _displayList = results; 
+        _isLoading = false; 
+        _applyLogic(); 
+        _startCarousel(); 
+      });
+    }
   }
 
   void _applyLogic() {
