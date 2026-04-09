@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:async'; // For Auto-Scroll Timer
+import 'dart:async'; // Required for Auto-Scroll Timers
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
@@ -82,7 +82,7 @@ class AppConfig {
 void main() => runApp(const TheRadicalApp());
 
 /// ===========================================================================
-/// 3. ROOT WIDGET
+/// 3. ROOT WIDGET (Handles Persistence)
 /// ===========================================================================
 class TheRadicalApp extends StatefulWidget {
   const TheRadicalApp({super.key});
@@ -93,10 +93,15 @@ class TheRadicalApp extends StatefulWidget {
 class _TheRadicalAppState extends State<TheRadicalApp> {
   Color primaryColor = AppColors.themeChoices[0];
 
+  /// MEMORY: Load saved settings before the app builds its first frame
   Future<void> _initApp() async {
-    final prefs = await SharedPreferences.getInstance();
-    final int? colorValue = prefs.getInt('theme_color');
-    if (colorValue != null) primaryColor = Color(colorValue);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final int? colorValue = prefs.getInt('theme_color');
+      if (colorValue != null) primaryColor = Color(colorValue);
+    } catch (e) {
+      debugPrint("Init Error: $e");
+    }
   }
 
   void updateTheme(Color newColor) async {
@@ -131,7 +136,7 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
 }
 
 /// ===========================================================================
-/// 4. DATA MODEL
+/// 4. ARTICLE DATA MODEL
 /// ===========================================================================
 class Article {
   final String title, link, pubDate, description, source, thumbnail;
@@ -159,7 +164,7 @@ class Article {
 }
 
 /// ===========================================================================
-/// 5. MAIN DASHBOARD LOGIC
+/// 5. MAIN DASHBOARD LOGIC (The Smart Engine)
 /// ===========================================================================
 class NewsDashboard extends StatefulWidget {
   final Color primaryColor;
@@ -185,7 +190,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   int _totalSources = 0;
   int _completedSources = 0;
-  String _statusMessage = "Starting...";
+  String _statusMessage = "Ready";
 
   @override
   void initState() {
@@ -201,24 +206,23 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Future<void> _bootSequence() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _extendedMode = prefs.getBool('extended_coverage') ?? false);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() => _extendedMode = prefs.getBool('extended_coverage') ?? false);
+    } catch (e) {
+      debugPrint("Preference load error: $e");
+    }
     _fetchNews();
   }
 
-  /// IMAGE PROXY LOGIC: This launders the images through a proxy to bypass CORS blocks.
-  String _proxyImage(String url) {
-    if (url.isEmpty) return "";
-    // images.weserv.nl is a fast, free proxy used specifically for web dashboard apps.
-    return "https://images.weserv.nl/?url=${Uri.encodeComponent(url)}&w=800&fit=cover";
-  }
-
+  /// STABLE FETCH ENGINE
   Future<void> _fetchNews() async {
     if (!mounted) return;
     setState(() {
       _isLoading = true;
       _completedSources = 0;
-      _statusMessage = "Dialing signals...";
+      _allArticles = [];
+      _statusMessage = "Connecting...";
     });
 
     final sources = Map.from(AppConfig.coreSources)..addAll(AppConfig.globalSources);
@@ -228,8 +232,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
     List<Article> results = [];
     Set<String> seenLinks = {};
 
+    int stagger = 0;
     List<Future<void>> tasks = sources.entries.map((entry) async {
-      await Future.delayed(const Duration(milliseconds: 100)); 
+      stagger += 50; 
+      await Future.delayed(Duration(milliseconds: stagger));
+      
       try {
         final response = await http.get(Uri.parse(
           'https://api.rss2json.com/v1/api.json?rss_url=${Uri.encodeComponent(entry.key)}'
@@ -253,7 +260,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
               List cats = item['categories'] ?? [];
               for (var c in cats) {
                 AppConfig.topics.forEach((name, keywords) {
-                  if (keywords.any((k) => c.toString().toLowerCase().contains(k))) {
+                  if (keywords.any((kw) => c.toString().toLowerCase().contains(kw))) {
                     if (!tags.contains(name)) tags.add(name);
                   }
                 });
@@ -269,8 +276,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
             }
           }
         }
-      } catch (e) {
-        debugPrint("Network Error: ${entry.value}");
+      } catch (e) { 
+        debugPrint("Skipped: ${entry.value}"); 
       } finally {
         if (mounted) {
           setState(() {
@@ -351,7 +358,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   /// ===========================================================================
-  /// UI COMPONENTS (The UI Layer)
+  /// UI COMPONENTS
   /// ===========================================================================
 
   Widget _fixedTopSection(double width) {
@@ -470,8 +477,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.borderSubtle)),
         child: Stack(
           children: [
-            // PROXIED IMAGE LOAD
-            if (a.thumbnail.isNotEmpty) Positioned.fill(child: Image.network(_proxyImage(a.thumbnail), fit: BoxFit.cover, errorBuilder: (c, e, s) => Container())),
+            if (a.thumbnail.isNotEmpty) Positioned.fill(child: Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container())),
             Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, AppColors.appBackground])))),
             Positioned(top: 20, left: 20, child: Wrap(spacing: 8, children: [_badge("LATEST", widget.primaryColor, AppColors.appBackground), ...a.topics.map((t) => _badge(t, AppColors.textMain, AppColors.appBackground))])),
             Positioned(bottom: 40, left: 40, right: 40, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -505,8 +511,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // PROXIED IMAGE LOAD
-            AspectRatio(aspectRatio: 16 / 9, child: Container(color: Colors.black26, child: a.thumbnail.isNotEmpty ? Image.network(_proxyImage(a.thumbnail), fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(FontAwesomeIcons.satelliteDish)) : const Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle))),
+            AspectRatio(aspectRatio: 16 / 9, child: Container(color: Colors.black26, child: a.thumbnail.isNotEmpty ? Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle)) : const Icon(FontAwesomeIcons.satelliteDish, color: AppColors.textSubtle))),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -535,7 +540,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const SizedBox(height: 40),
+          const SizedBox(height: 60),
           Row(children: [Icon(FontAwesomeIcons.gear, color: widget.primaryColor), const SizedBox(width: 12), const Text("CONTROL PANEL", style: TextStyle(fontWeight: FontWeight.bold))]),
           const SizedBox(height: 30),
           _coverageToggle(),
@@ -558,8 +563,12 @@ class _NewsDashboardState extends State<NewsDashboard> {
       subtitle: const Text("Include broader independent sources.", style: TextStyle(fontSize: 10)),
       value: _extendedMode, activeThumbColor: widget.primaryColor,
       onChanged: (v) async {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('extended_coverage', v);
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('extended_coverage', v);
+        } catch (e) {
+          debugPrint("Save failed: $e");
+        }
         setState(() => _extendedMode = v);
         _fetchNews();
       },
