@@ -10,7 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// ===========================================================================
-/// 1. DESIGN SYSTEM
+/// DESIGN SYSTEM
 /// Defines the visual identity of the app (colors and theme constants).
 /// ===========================================================================
 class AppColors {
@@ -38,40 +38,56 @@ class AppColors {
 }
 
 /// ===========================================================================
-/// 2. APP CONFIGURATION
+/// APP CONFIGURATION
 /// Contains the data sources, filtering keywords, and topic categories.
 /// ===========================================================================
 class AppConfig {
   // Primary news sources (Mostly Australian independent/radical media)
   static const Map<String, String> coreSources = {
-    "https://ancomfed.org/picket-line/feed": "PICKET LINE",
-    "https://www.greenleft.org.au/rss.xml": "GREEN LEFT",
-    "https://redflag.org.au/rss/": "RED FLAG",
-    "https://red-spark.org/tag/australia/feed": "RED SPARK",
-    "https://socialismtoday.au/feed": "SOCIALISM TODAY",
-    "https://solidarity.net.au/feed": "SOLIDARITY",
-    "https://labortribune.net.au/feed": "LABOR TRIBUNE",
+    "https://ancomfed.org/picket-line/feed":
+        "PICKET LINE",
+    "https://www.greenleft.org.au/rss.xml":
+        "GREEN LEFT",
+    "https://redflag.org.au/rss/":
+        "RED FLAG",
+    "https://red-spark.org/tag/australia/feed":
+        "RED SPARK",
+    "https://socialismtoday.au/feed":
+        "SOCIALISM TODAY",
+    "https://solidarity.net.au/feed":
+        "SOLIDARITY",
+    "https://labortribune.net.au/feed":
+        "LABOR TRIBUNE",
     "https://www.wsws.org/en/topics/country/australia/rss.xml":
         "WORLD SOCIALIST WEB SITE",
-    "https://melbacg.au/category/anvil/rss": "THE ANVIL",
-    "https://vanguard-cpaml.blogspot.com/rss.xml": "VANGUARD",
-    "https://partisanmagazine.org/feed/": "PARTISAN!",
-    "https://redantcollective.org/feed": "RED ANT",
-    "https://temokalati.wordpress.com/feed": "TEMOKALATI",
-    "https://www.thenews.coop/country/oceania/feed": "CO-OP NEWS",
+    "https://melbacg.au/category/anvil/rss":
+        "THE ANVIL",
+    "https://vanguard-cpaml.blogspot.com/rss.xml":
+        "VANGUARD",
+    "https://partisanmagazine.org/feed/":
+        "PARTISAN!",
+    "https://redantcollective.org/feed":
+        "RED ANT",
+    "https://temokalati.wordpress.com/feed":
+        "TEMOKALATI",
+    "https://www.thenews.coop/country/oceania/feed":
+        "CO-OP NEWS",
     "https://seqldiww.org/category/australia/feed":
         "IWW (SOUTH EAST QUEENSLAND)"
   };
 
   // Global sources that are filtered for Australian keywords
   static const Map<String, String> globalSources = {
-    "https://jacobin.com/feed": "JACOBIN"
+    "https://jacobin.com/feed":
+        "JACOBIN"
   };
 
   // Optional sources enabled via "Extended Coverage" toggle
   static const Map<String, String> extendedSources = {
-    "https://michaelwest.com.au/category/latest-posts/feed/": "MICHAEL WEST",
-    "http://feeds.feedburner.com/IndependentAustralia": "INDEPENDENT AUSTRALIA",
+    "https://michaelwest.com.au/category/latest-posts/feed/":
+        "MICHAEL WEST",
+    "http://feeds.feedburner.com/IndependentAustralia":
+        "INDEPENDENT AUSTRALIA",
     "https://theconversation.com/topics/australia-64/articles.atom":
         "THE CONVERSATION",
     "https://www.theguardian.com/australia-news/australian-trade-unions/rss":
@@ -80,14 +96,35 @@ class AppConfig {
 
   // Keywords used to filter global sources for relevance to Australia
   static const List<String> auKeywords = [
-    "australia", "australian", "sydney", "melbourne", "brisbane", "perth",
-    "adelaide", "canberra", "hobart", "darwin", "victoria", "queensland",
-    "tasmania", "nsw", "vic", "qld", "western australia"
+    "australia",
+    "australian",
+    "sydney",
+    "melbourne",
+    "brisbane",
+    "perth",
+    "adelaide",
+    "canberra",
+    "hobart",
+    "darwin",
+    "victoria",
+    "queensland",
+    "tasmania",
+    "nsw",
+    "vic",
+    "qld",
+    "western australia"
   ];
 
   // Topic classification map (If an article contains a keyword, it gets tagged)
   static const Map<String, List<String>> topics = {
-    "ECONOMY": ["economy", "economic", "inflation", "tax", "wealth", "budget"],
+    "ECONOMY": [
+      "economy",
+      "economic",
+      "inflation",
+      "tax",
+      "wealth",
+      "budget"
+    ],
     "ENVIRONMENT": [
       "climate",
       "environment",
@@ -135,7 +172,13 @@ class AppConfig {
       "albanese",
       "dutton"
     ],
-    "PRAXIS": ["praxis", "protest", "activism", "organizing", "demonstration"],
+    "PRAXIS": [
+      "praxis",
+      "protest",
+      "activism",
+      "organizing",
+      "demonstration"
+    ],
     "TECHNOLOGY": [
       "technology",
       "AI",
@@ -149,7 +192,7 @@ class AppConfig {
 void main() => runApp(const TheRadicalApp());
 
 /// ===========================================================================
-/// 3. ROOT WIDGET
+/// ROOT WIDGET
 /// Manages the application-level state (Theme color and SharedPrefs).
 /// ===========================================================================
 class TheRadicalApp extends StatefulWidget {
@@ -214,7 +257,7 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
 }
 
 /// ===========================================================================
-/// 4. ARTICLE DATA MODEL & PARSING ENGINE
+/// ARTICLE DATA MODEL & PARSING ENGINE
 /// Handles cleaning, image scraping, and data normalization for RSS/Atom.
 /// ===========================================================================
 class Article {
@@ -316,7 +359,7 @@ class Article {
 }
 
 /// ===========================================================================
-/// 5. MAIN DASHBOARD LOGIC (FAIL-PROOF FETCHING)
+/// MAIN DASHBOARD LOGIC (FAIL-PROOF FETCHING)
 /// Core stateful widget handling news retrieval, filtering, and UI display.
 /// ===========================================================================
 class NewsDashboard extends StatefulWidget {
