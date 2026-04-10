@@ -44,50 +44,34 @@ class AppColors {
 class AppConfig {
   // Primary news sources (Mostly Australian independent/radical media)
   static const Map<String, String> coreSources = {
-    "https://ancomfed.org/picket-line/feed":
-        "PICKET LINE",
-    "https://www.greenleft.org.au/rss.xml":
-        "GREEN LEFT",
-    "https://redflag.org.au/rss/":
-        "RED FLAG",
-    "https://red-spark.org/tag/australia/feed":
-        "RED SPARK",
-    "https://socialismtoday.au/feed":
-        "SOCIALISM TODAY",
-    "https://solidarity.net.au/feed":
-        "SOLIDARITY",
-    "https://labortribune.net.au/feed":
-        "LABOR TRIBUNE",
+    "https://ancomfed.org/picket-line/feed": "PICKET LINE",
+    "https://www.greenleft.org.au/rss.xml": "GREEN LEFT",
+    "https://redflag.org.au/rss/": "RED FLAG",
+    "https://red-spark.org/tag/australia/feed": "RED SPARK",
+    "https://socialismtoday.au/feed": "SOCIALISM TODAY",
+    "https://solidarity.net.au/feed": "SOLIDARITY",
+    "https://labortribune.net.au/feed": "LABOR TRIBUNE",
     "https://www.wsws.org/en/topics/country/australia/rss.xml":
         "WORLD SOCIALIST WEB SITE",
-    "https://melbacg.au/category/anvil/rss":
-        "THE ANVIL",
-    "https://vanguard-cpaml.blogspot.com/rss.xml":
-        "VANGUARD",
-    "https://partisanmagazine.org/feed/":
-        "PARTISAN!",
-    "https://redantcollective.org/feed":
-        "RED ANT",
-    "https://temokalati.wordpress.com/feed":
-        "TEMOKALATI",
-    "https://www.thenews.coop/country/oceania/feed":
-        "CO-OP NEWS",
+    "https://melbacg.au/category/anvil/rss": "THE ANVIL",
+    "https://vanguard-cpaml.blogspot.com/rss.xml": "VANGUARD",
+    "https://partisanmagazine.org/feed/": "PARTISAN!",
+    "https://redantcollective.org/feed": "RED ANT",
+    "https://temokalati.wordpress.com/feed": "TEMOKALATI",
+    "https://www.thenews.coop/country/oceania/feed": "CO-OP NEWS",
     "https://seqldiww.org/category/australia/feed":
         "IWW (SOUTH EAST QUEENSLAND)"
   };
 
   // Global sources that are filtered for Australian keywords
   static const Map<String, String> globalSources = {
-    "https://jacobin.com/feed":
-        "JACOBIN"
+    "https://jacobin.com/feed": "JACOBIN"
   };
 
   // Optional sources enabled via "Extended Coverage" toggle
   static const Map<String, String> extendedSources = {
-    "https://michaelwest.com.au/category/latest-posts/feed/":
-        "MICHAEL WEST",
-    "http://feeds.feedburner.com/IndependentAustralia":
-        "INDEPENDENT AUSTRALIA",
+    "https://michaelwest.com.au/category/latest-posts/feed/": "MICHAEL WEST",
+    "http://feeds.feedburner.com/IndependentAustralia": "INDEPENDENT AUSTRALIA",
     "https://theconversation.com/topics/australia-64/articles.atom":
         "THE CONVERSATION",
     "https://www.theguardian.com/australia-news/australian-trade-unions/rss":
@@ -103,32 +87,61 @@ class AppConfig {
 
   // Topic classification map (If an article contains a keyword, it gets tagged)
   static const Map<String, List<String>> topics = {
-    "ECONOMY": [
-        "economy", "economic", "inflation", "tax", "wealth", "budget"
-    ],
+    "ECONOMY": ["economy", "economic", "inflation", "tax", "wealth", "budget"],
     "ENVIRONMENT": [
-        "climate", "environment", "warming", "emissions", "coal", "gas"
+      "climate",
+      "environment",
+      "warming",
+      "emissions",
+      "coal",
+      "gas"
     ],
     "FIRST NATIONS": [
-        "first nations", "indigenous", "aboriginal", "treaty", "voice"
+      "first nations",
+      "indigenous",
+      "aboriginal",
+      "treaty",
+      "voice"
     ],
     "INTERNATIONAL": [
-        "international", "global", "war", "imperialism", "nato", "ukraine"
+      "international",
+      "global",
+      "war",
+      "imperialism",
+      "nato",
+      "ukraine"
     ],
     "LABOUR": [
-        "labour", "worker", "union", "strike", "industrial", "wage", "cfmeu"
+      "labour",
+      "worker",
+      "union",
+      "strike",
+      "industrial",
+      "wage",
+      "cfmeu"
     ],
     "MUTUAL AID": [
-        "mutual aid", "solidarity", "community", "co-op", "cooperative"
+      "mutual aid",
+      "solidarity",
+      "community",
+      "co-op",
+      "cooperative"
     ],
     "PARLIAMENT": [
-        "parliament", "government", "senate", "election", "albanese", "dutton"
+      "parliament",
+      "government",
+      "senate",
+      "election",
+      "albanese",
+      "dutton"
     ],
-    "PRAXIS": [
-        "praxis", "protest", "activism", "organizing", "demonstration"
-    ],
+    "PRAXIS": ["praxis", "protest", "activism", "organizing", "demonstration"],
     "TECHNOLOGY": [
-        "technology", "AI", "artificial intelligence", "surveillance", "privacy"
+      "technology",
+      "AI",
+      "artificial intelligence",
+      "surveillance",
+      "privacy"
     ]
   };
 }
@@ -222,7 +235,7 @@ class Article {
   /// Normalizes various date formats found in RSS and Atom feeds.
   static DateTime parseDate(String dateString) {
     if (dateString.isEmpty) return DateTime.now();
-    
+
     // Attempt standard ISO parsing first
     DateTime? result = DateTime.tryParse(dateString);
     if (result != null) return result;
@@ -254,7 +267,7 @@ class Article {
     if (clean.contains("i0.wp.com/")) {
       clean = "https://${clean.split("i0.wp.com/").last.split("?").first}";
     }
-    
+
     clean = Uri.decodeFull(clean);
     return "https://images.weserv.nl/?url=${Uri.encodeComponent(clean)}&w=1200&fit=cover&output=webp";
   }
@@ -364,7 +377,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     _fetchNews();
   }
 
-  /// SEQUENTIAL FETCH ENGINE: 
+  /// SEQUENTIAL FETCH ENGINE:
   /// Pulls XML from various sources, parses them, and sorts by date.
   /// Sequential processing is used to avoid rate-limiting from the CORS proxy.
   Future<void> _fetchNews() async {
@@ -420,19 +433,24 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 RegExp(r'<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>',
                         dotAll: true)
                     .firstMatch(content)
-                    ?.group(1) ?? 'Untitled');
+                    ?.group(1) ??
+                'Untitled');
 
-            String link = RegExp(r'<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>',
-                    dotAll: true)
-                .firstMatch(content)
-                ?.group(1) ?? '';
-
-            String pubDateStr = RegExp(r'<pubDate>(.*?)</pubDate>', dotAll: true)
+            String link =
+                RegExp(r'<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>',
+                        dotAll: true)
                     .firstMatch(content)
                     ?.group(1) ??
-                RegExp(r'<published>(.*?)</published>', dotAll: true)
-                    .firstMatch(content)
-                    ?.group(1) ?? '';
+                '';
+
+            String pubDateStr =
+                RegExp(r'<pubDate>(.*?)</pubDate>', dotAll: true)
+                        .firstMatch(content)
+                        ?.group(1) ??
+                    RegExp(r'<published>(.*?)</published>', dotAll: true)
+                        .firstMatch(content)
+                        ?.group(1) ??
+                    '';
 
             String desc = RegExp(
                         r'<description>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</description>',
@@ -442,7 +460,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 RegExp(r'<content.*?>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</content>',
                         dotAll: true)
                     .firstMatch(content)
-                    ?.group(1) ?? '';
+                    ?.group(1) ??
+                '';
 
             if (seenLinks.contains(link) || link.isEmpty) continue;
             seenLinks.add(link);
@@ -467,7 +486,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
             if (thumb.isEmpty) {
               thumb = RegExp(r'<media:content[^>]+url="(.*?)"')
                       .firstMatch(content)
-                      ?.group(1) ?? '';
+                      ?.group(1) ??
+                  '';
             }
 
             results.add(Article(
@@ -546,7 +566,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     try {
       Duration diff = DateTime.now().difference(postDate);
       String formatted = DateFormat('dd/MM/yyyy').format(postDate);
-      
+
       // If within 3 days, show relative time
       if (diff.inDays <= 3 && !diff.isNegative) {
         if (diff.inMinutes < 60) return "${diff.inMinutes}m ago ($formatted)";
@@ -826,9 +846,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
               child: Wrap(
                 spacing: 8,
                 children: [
-                  _badge("LATEST", widget.primaryColor, AppColors.appBackground),
+                  _badge(
+                      "LATEST", widget.primaryColor, AppColors.appBackground),
                   ...a.topics.map(
-                    (t) => _badge(t, AppColors.textMain, AppColors.appBackground),
+                    (t) =>
+                        _badge(t, AppColors.textMain, AppColors.appBackground),
                   )
                 ],
               ),
@@ -937,8 +959,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
                       spacing: 4,
                       runSpacing: 4,
                       children: a.topics
-                          .map((t) => _badge(
-                              t, AppColors.highlightOverlay, AppColors.textMain))
+                          .map((t) => _badge(t, AppColors.highlightOverlay,
+                              AppColors.textMain))
                           .toList(),
                     ),
                     const SizedBox(height: 8)
@@ -994,6 +1016,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
         padding: const EdgeInsets.all(24),
         children: [
           const SizedBox(height: 60),
+
+          // ---------------------------------------------------------
+          // SECTION: CONTROL PANEL HEADER
+          // ---------------------------------------------------------
           Row(
             children: [
               Icon(FontAwesomeIcons.gear, color: widget.primaryColor),
@@ -1005,8 +1031,16 @@ class _NewsDashboardState extends State<NewsDashboard> {
             ],
           ),
           const SizedBox(height: 30),
+
+          // ---------------------------------------------------------
+          // SECTION: COVERAGE TOGGLE
+          // ---------------------------------------------------------
           _coverageToggle(),
           const SizedBox(height: 40),
+
+          // ---------------------------------------------------------
+          // SECTION: THEME PALETTE
+          // ---------------------------------------------------------
           const Text(
             "THEME PALETTE",
             style: TextStyle(
@@ -1018,6 +1052,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
           const SizedBox(height: 10),
           _themePicker(),
           const SizedBox(height: 40),
+
+          // ---------------------------------------------------------
+          // SECTION: TOPIC FILTERS
+          // ---------------------------------------------------------
           const Text(
             "TOPIC FILTERS",
             style: TextStyle(
@@ -1028,7 +1066,154 @@ class _NewsDashboardState extends State<NewsDashboard> {
           ),
           const SizedBox(height: 10),
           _topicList(),
+          const SizedBox(height: 40),
+
+          // ---------------------------------------------------------
+          // SECTION: ABOUT / INFORMATION
+          // ---------------------------------------------------------
+          _aboutButton(),
         ],
+      ),
+    );
+  }
+
+  Widget _aboutButton() {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context);
+        _showAboutDialog();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: widget.primaryColor),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(FontAwesomeIcons.circleInfo,
+                    size: 14, color: widget.primaryColor),
+                const SizedBox(width: 12),
+                const Text(
+                  "ABOUT PROJECT",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ),
+            Icon(FontAwesomeIcons.arrowRight,
+                size: 10, color: widget.primaryColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: AppColors.appSurface,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600),
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.borderSubtle),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(FontAwesomeIcons.circleInfo,
+                                size: 16, color: widget.primaryColor),
+                            const SizedBox(width: 10),
+                            const Text(
+                              "PROJECT BRIEFING",
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 4,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          "THE RADICAL",
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(FontAwesomeIcons.xmark, size: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+                Container(
+                  padding: const EdgeInsets.only(left: 20),
+                  decoration: BoxDecoration(
+                    border: Border(
+                        left: BorderSide(color: widget.primaryColor, width: 2)),
+                  ),
+                  child: const Text(
+                    "The Radical is an independent news aggregator designed to centralise reporting from Australian political and social perspectives.",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "Designed for tracking material and economic realities without having to manually check dozens of sources every day.",
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 16),
+                ),
+                const SizedBox(height: 40),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: widget.primaryColor,
+                      foregroundColor: Colors.black,
+                      shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.zero),
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                    ),
+                    child: const Text(
+                      "CLOSE",
+                      style: TextStyle(
+                          fontWeight: FontWeight.w900, letterSpacing: 3),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1071,7 +1256,9 @@ class _NewsDashboardState extends State<NewsDashboard> {
             decoration: BoxDecoration(
               color: c,
               border: Border.all(
-                color: widget.primaryColor == c ? Colors.white : Colors.transparent,
+                color: widget.primaryColor == c
+                    ? Colors.white
+                    : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -1097,10 +1284,12 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 Navigator.pop(context);
               },
               style: TextButton.styleFrom(
-                backgroundColor: isActive ? widget.primaryColor : Colors.transparent,
+                backgroundColor:
+                    isActive ? widget.primaryColor : Colors.transparent,
                 alignment: Alignment.centerLeft,
                 side: BorderSide(
-                  color: isActive ? widget.primaryColor : AppColors.borderSubtle,
+                  color:
+                      isActive ? widget.primaryColor : AppColors.borderSubtle,
                 ),
               ),
               child: Text(
