@@ -1,15 +1,18 @@
-
 <h1 align="center">
-<img src="assets/logo_placeholder.png" alt="The Radical Logo" width="128" height="128"/>
-<br>
-The Radical
+  <img src="assets/logo_placeholder.png" alt="The Radical Logo" width="128" height="128"/>
+  <br>
+  The Radical
 </h1>
 
 <p align="center">
-A high-performance news aggregator centralized for Australian political and social perspectives — built for rapid information scanning and independent media discovery.
+  A high-performance news aggregator centralized for Australian political and social perspectives — built for rapid information scanning and independent media discovery.
 </p>
 
 <div align="center">
+
+<a href="https://spacemansparrow.github.io/LeftNewsGrabberProject/">
+  <img src="https://img.shields.io/badge/Live_Demo-Visit_The_Radical-red?style=for-the-badge&logo=rocket" alt="Live Site">
+</a>
 
 </div>
 
