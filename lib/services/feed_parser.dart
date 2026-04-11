@@ -28,11 +28,9 @@ class FeedParser {
         .firstMatch(content)
         ?.group(1) ?? 'Untitled');
 
-      // 2. Extract Link
-      String link = RegExp(r'href="([^"]+)"').firstMatch(content)?.group(1) ??
-      RegExp(r'<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>', dotAll: true)
-      .firstMatch(content)
-      ?.group(1) ?? '';
+      // 2. Extract Link (FIXED: Targeted to specific link tags to avoid body-text URLs)
+      String link = RegExp(r'<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>', dotAll: true).firstMatch(content)?.group(1) ??
+      RegExp(r"""<link[^>]+href=["']([^"']+)["']""").firstMatch(content)?.group(1) ?? '';
 
       // 3. Extract Date
       String pubDateStr = RegExp(r'<pubDate>(.*?)</pubDate>', dotAll: true).firstMatch(content)?.group(1) ??
@@ -74,7 +72,7 @@ class FeedParser {
 
       results.add(Article(
         title: title,
-        link: link,
+        link: link.trim(),
         source: sourceName,
         topics: tags,
         description: cleanHtml(bestDesc),
