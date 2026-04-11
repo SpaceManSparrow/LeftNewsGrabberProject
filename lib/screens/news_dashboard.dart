@@ -267,18 +267,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _mainScrollArea(double width) {
-    int cols = 1;
-    if (width > 1600) {
-      cols = 4;
-    } else if (width > 1100) {
-      cols = 3;
-    } else if (width > 700) {
-      cols = 2;
-    }
-
-    // Ratio 0.66 accounts for 4:5 image (0.8) + Instagram-style caption space below
-    double ratio = (cols == 1) ? 0.72 : 0.66;
-
     return ListView(
       children: [
         Center(
@@ -293,11 +281,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
                   child: GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 450, // Locked max size
                       crossAxisSpacing: 30,
                       mainAxisSpacing: 40,
-                      childAspectRatio: ratio,
+                      mainAxisExtent: 680, // Locked height prevents overflow
                     ),
                     itemCount: _displayList.length > 3 ? _displayList.length - 3 : 0,
                     itemBuilder: (c, i) => _articleCard(_displayList[i + 3]),
@@ -368,8 +356,12 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _articleCard(Article a) {
-    // Trimming Logic
-    String text = a.description.trim();
+    // Trimming Logic to force "... more" visibility
+    const int charLimit = 110;
+    String text = a.description.length > charLimit ? a.description.substring(0, charLimit) : a.description;
+    text = text.trimRight();
+    
+    // User Rule: If it ends on a full stop, remove last word and space to ensure it stays "unfinished"
     if (text.endsWith('.')) {
       int lastSpace = text.lastIndexOf(' ');
       if (lastSpace != -1) text = text.substring(0, lastSpace);
@@ -379,13 +371,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(a.link)),
       child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.appBackground,
-        ),
+        decoration: const BoxDecoration(color: AppColors.appBackground),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image box: 4:5 ratio with overlay design matching Hero
             AspectRatio(
               aspectRatio: 4 / 5, 
               child: Container(
@@ -398,21 +387,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     if (a.thumbnail.isNotEmpty) 
                       Positioned.fill(child: Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
                     Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
-                    // Topics top-left
                     Positioned(top: 12, left: 12, child: Wrap(spacing: 4, runSpacing: 4, children: a.topics.map((t) => _badge(t, Colors.white, Colors.black)).toList())),
-                    // Title bottom-left
                     Positioned(bottom: 16, left: 16, right: 16, child: Text(a.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
                   ],
                 ),
               ),
             ),
-            // Instagram-style caption area below the image
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_formatDate(a.parsedDate).toUpperCase(), style: const TextStyle(fontSize: 9, color: AppColors.textSubtle, fontWeight: FontWeight.bold)),
+                  Text(_formatDate(a.parsedDate).toUpperCase(), style: const TextStyle(fontSize: 8, color: AppColors.textSubtle, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   RichText(
                     maxLines: 3,
@@ -422,7 +408,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                       children: [
                         TextSpan(
                           text: "${a.source}  ",
-                          style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.w900, fontSize: 10),
+                          style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.w900, fontSize: 11),
                         ),
                         TextSpan(text: text),
                         const TextSpan(text: "... "),

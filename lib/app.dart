@@ -18,6 +18,15 @@ class TheRadicalApp extends StatefulWidget {
 class _TheRadicalAppState extends State<TheRadicalApp> {
   // Default primary color (Amber) until user preferences load
   Color primaryColor = AppColors.themeChoices[0];
+  
+  // FIX: Store the future in a variable so it doesn't restart on every rebuild
+  late Future<void> _initFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFuture = _initApp();
+  }
 
   /// Loads the saved theme color from device storage on startup
   Future<void> _initApp() async {
@@ -25,7 +34,9 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
       final prefs = await SharedPreferences.getInstance();
       final int? colorValue = prefs.getInt('theme_color');
       if (colorValue != null) {
-        primaryColor = Color(colorValue);
+        setState(() {
+          primaryColor = Color(colorValue);
+        });
       }
     } catch (e) {
       debugPrint("Initialization Error: $e");
@@ -42,7 +53,7 @@ class _TheRadicalAppState extends State<TheRadicalApp> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: _initApp(),
+      future: _initFuture, // FIX: Use the persisted future here
       builder: (context, snapshot) {
         // Show a blank dark screen while waiting for storage to initialize
         if (snapshot.connectionState == ConnectionState.waiting) {
