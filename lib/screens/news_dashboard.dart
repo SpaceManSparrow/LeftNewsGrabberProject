@@ -36,6 +36,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
   List<Article> _displayList = [];
   bool _isLoading = true;
   bool _extendedMode = false;
+  bool _prettyMode = false;
   String _activeFilter = "ALL";
   int _heroIndex = 0;
   Timer? _autoScrollTimer;
@@ -61,7 +62,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
   Future<void> _bootSequence() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      setState(() => _extendedMode = prefs.getBool('extended_coverage') ?? false);
+      setState(() {
+        _extendedMode = prefs.getBool('extended_coverage') ?? false;
+        _prettyMode = prefs.getBool('pretty_mode') ?? false;
+      });
     } catch (e) {
       debugPrint("Preference load error: $e");
     }
@@ -133,9 +137,15 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   void _applyLogic() {
     setState(() {
-      _displayList = (_activeFilter == "ALL")
-      ? _allArticles
-      : _allArticles.where((a) => a.topics.contains(_activeFilter)).toList();
+      Iterable<Article> filtered = _allArticles;
+      if (_activeFilter != "ALL") {
+        filtered = filtered.where((a) => a.topics.contains(_activeFilter));
+      }
+      if (_prettyMode) {
+        // Only keep articles that have a non-empty thumbnail URL
+        filtered = filtered.where((a) => a.thumbnail.isNotEmpty);
+      }
+      _displayList = filtered.toList();
     });
   }
 
@@ -278,16 +288,14 @@ class _NewsDashboardState extends State<NewsDashboard> {
             child: Column(
               children: [
                 _sectionHeader(width),
-                if (_displayList.isNotEmpty) _buildHeroCarousel(width),
+                // if (_displayList.isNotEmpty) _buildHeroCarousel(width), // Commented out Hero
                 const SizedBox(height: 32),
                 Center(
                   child: Wrap(
                     spacing: articleGap,
                     runSpacing: articleGap,
                     alignment: WrapAlignment.center,
-                    children: _displayList.length > 3 
-                        ? _displayList.skip(3).map((a) {
-                            // Rule: Scale entire article only if it's wider than screen
+                    children: _displayList.map((a) { 
                             if (width < 432) {
                               return FittedBox(
                                 fit: BoxFit.scaleDown,
@@ -295,8 +303,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                               );
                             }
                             return _articleCard(a);
-                          }).toList() 
-                        : [],
+                          }).toList(),
                   ),
                 ),
               ],
@@ -379,8 +386,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
     text = text.trimRight();
 
     return Container(
-      width: 400, // Hard locked width
-      height: 580, // Hard locked height
+      width: 400, 
+      height: 580, 
       color: Colors.transparent,
       child: InkWell(
         onTap: () => launchUrl(Uri.parse(a.link)),
@@ -390,11 +397,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
             AspectRatio(
               aspectRatio: 4 / 5, 
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(28), // Squircle rounding
+                borderRadius: BorderRadius.circular(28), 
                 child: Container(
                   decoration: BoxDecoration(
                     color: AppColors.tileBackground,
-                    border: Border.all(color: AppColors.borderSubtle),
+                    border: Border.all(color: AppColors.appBackground),
                     borderRadius: BorderRadius.circular(28),
                   ),
                   child: Stack(
@@ -451,6 +458,20 @@ class _NewsDashboardState extends State<NewsDashboard> {
           Row(children: [Icon(FontAwesomeIcons.gear, color: widget.primaryColor), const SizedBox(width: 12), const Text("CONTROL PANEL", style: TextStyle(fontWeight: FontWeight.bold))]),
           const SizedBox(height: 30),
           _coverageToggle(),
+          SwitchListTile(
+            title: const Text("PRETTY MODE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            subtitle: const Text("Only show articles that have photos.", style: TextStyle(fontSize: 10)),
+            value: _prettyMode,
+            activeThumbColor: widget.primaryColor,
+            onChanged: (v) async {
+              try {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('pretty_mode', v);
+              } catch (e) { debugPrint("Save failed: $e"); }
+              setState(() => _prettyMode = v);
+              _applyLogic();
+            },
+          ),
           const SizedBox(height: 40),
           const Text("THEME PALETTE", style: TextStyle(fontSize: 10, color: AppColors.textSubtle, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
