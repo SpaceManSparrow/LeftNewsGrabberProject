@@ -267,28 +267,27 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _mainScrollArea(double width) {
+    const double articleGap = 30.0; // Centralized gap variable
+
     return ListView(
       children: [
         Center(
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 1800),
+            constraints: const BoxConstraints(maxWidth: 1754), 
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
             child: Column(
               children: [
                 _sectionHeader(width),
                 if (_displayList.isNotEmpty) _buildHeroCarousel(width),
-                Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 450, // Locked max size
-                      crossAxisSpacing: 30,
-                      mainAxisSpacing: 40,
-                      mainAxisExtent: 680, // Locked height prevents overflow
-                    ),
-                    itemCount: _displayList.length > 3 ? _displayList.length - 3 : 0,
-                    itemBuilder: (c, i) => _articleCard(_displayList[i + 3]),
+                const SizedBox(height: 32),
+                Center(
+                  child: Wrap(
+                    spacing: articleGap,     // Same horizontal gap
+                    runSpacing: articleGap,  // Same vertical gap
+                    alignment: WrapAlignment.center,
+                    children: _displayList.length > 3 
+                        ? _displayList.skip(3).map((a) => _articleCard(a)).toList() 
+                        : [],
                   ),
                 ),
               ],
@@ -356,22 +355,28 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _articleCard(Article a) {
-    // Trimming Logic to force "... more" visibility
-    const int charLimit = 110;
+    // SURGICAL TRIMMING LOGIC
+    const int charLimit = 85; 
     String text = a.description.length > charLimit ? a.description.substring(0, charLimit) : a.description;
     text = text.trimRight();
     
-    // User Rule: If it ends on a full stop, remove last word and space to ensure it stays "unfinished"
     if (text.endsWith('.')) {
-      int lastSpace = text.lastIndexOf(' ');
-      if (lastSpace != -1) text = text.substring(0, lastSpace);
+      // Remove dot, word, and space
+      String temp = text.substring(0, text.length - 1).trimRight();
+      int lastSpace = temp.lastIndexOf(' ');
+      text = lastSpace != -1 ? temp.substring(0, lastSpace) : temp;
+    } else if (RegExp(r'[,;:\-!?]$').hasMatch(text)) {
+      // Remove specific grammar
+      text = text.substring(0, text.length - 1);
     }
     text = text.trimRight();
 
-    return InkWell(
-      onTap: () => launchUrl(Uri.parse(a.link)),
-      child: Container(
-        decoration: const BoxDecoration(color: AppColors.appBackground),
+    return Container(
+      width: 400, // Hard locked width
+      height: 580, // Hard locked height
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => launchUrl(Uri.parse(a.link)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -401,7 +406,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                   Text(_formatDate(a.parsedDate).toUpperCase(), style: const TextStyle(fontSize: 8, color: AppColors.textSubtle, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   RichText(
-                    maxLines: 3,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     text: TextSpan(
                       style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white),
