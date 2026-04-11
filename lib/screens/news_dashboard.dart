@@ -267,7 +267,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _mainScrollArea(double width) {
-    const double articleGap = 30.0; // Centralized gap variable
+    const double articleGap = 30.0;
 
     return ListView(
       children: [
@@ -282,11 +282,20 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 const SizedBox(height: 32),
                 Center(
                   child: Wrap(
-                    spacing: articleGap,     // Same horizontal gap
-                    runSpacing: articleGap,  // Same vertical gap
+                    spacing: articleGap,
+                    runSpacing: articleGap,
                     alignment: WrapAlignment.center,
                     children: _displayList.length > 3 
-                        ? _displayList.skip(3).map((a) => _articleCard(a)).toList() 
+                        ? _displayList.skip(3).map((a) {
+                            // Rule: Scale entire article only if it's wider than screen
+                            if (width < 432) {
+                              return FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: _articleCard(a),
+                              );
+                            }
+                            return _articleCard(a);
+                          }).toList() 
                         : [],
                   ),
                 ),
@@ -361,12 +370,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
     text = text.trimRight();
     
     if (text.endsWith('.')) {
-      // Remove dot, word, and space
       String temp = text.substring(0, text.length - 1).trimRight();
       int lastSpace = temp.lastIndexOf(' ');
       text = lastSpace != -1 ? temp.substring(0, lastSpace) : temp;
     } else if (RegExp(r'[,;:\-!?]$').hasMatch(text)) {
-      // Remove specific grammar
       text = text.substring(0, text.length - 1);
     }
     text = text.trimRight();
@@ -382,19 +389,23 @@ class _NewsDashboardState extends State<NewsDashboard> {
           children: [
             AspectRatio(
               aspectRatio: 4 / 5, 
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.tileBackground,
-                  border: Border.all(color: AppColors.borderSubtle),
-                ),
-                child: Stack(
-                  children: [
-                    if (a.thumbnail.isNotEmpty) 
-                      Positioned.fill(child: Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
-                    Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
-                    Positioned(top: 12, left: 12, child: Wrap(spacing: 4, runSpacing: 4, children: a.topics.map((t) => _badge(t, Colors.white, Colors.black)).toList())),
-                    Positioned(bottom: 16, left: 16, right: 16, child: Text(a.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
-                  ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28), // Squircle rounding
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.tileBackground,
+                    border: Border.all(color: AppColors.borderSubtle),
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Stack(
+                    children: [
+                      if (a.thumbnail.isNotEmpty) 
+                        Positioned.fill(child: Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
+                      Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
+                      Positioned(top: 12, left: 12, child: Wrap(spacing: 4, runSpacing: 4, children: a.topics.map((t) => _badge(t, Colors.white, Colors.black)).toList())),
+                      Positioned(bottom: 16, left: 16, right: 16, child: Text(a.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
+                    ],
+                  ),
                 ),
               ),
             ),
