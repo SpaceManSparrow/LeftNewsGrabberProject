@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:palette_generator/palette_generator.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_config.dart';
@@ -97,14 +98,11 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
         if (response.statusCode == 200) {
           String rawXml = utf8.decode(response.bodyBytes, allowMalformed: true);
-
-          // Delegate parsing to FeedParser Service
           final List<Article> parsedArticles = FeedParser.parse(rawXml, entry.value);
 
           for (var article in parsedArticles) {
             if (seenLinks.contains(article.link) || article.link.isEmpty) continue;
 
-            // Global Filter Logic
             if (AppConfig.globalSources.containsValue(entry.value)) {
               String searchable = "${article.title} ${article.description}".toLowerCase();
               if (!AppConfig.auKeywords.any((k) => searchable.contains(k))) continue;
@@ -142,7 +140,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
         filtered = filtered.where((a) => a.topics.contains(_activeFilter));
       }
       if (_prettyMode) {
-        // Only keep articles that have a non-empty thumbnail URL
         filtered = filtered.where((a) => a.thumbnail.isNotEmpty);
       }
       _displayList = filtered.toList();
@@ -167,19 +164,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
         _heroController.animateToPage(next, duration: const Duration(milliseconds: 800), curve: Curves.easeInOut);
       }
     });
-  }
-
-  String _formatDate(DateTime postDate) {
-    try {
-      Duration diff = DateTime.now().difference(postDate);
-      String formatted = DateFormat('dd/MM/yyyy').format(postDate);
-      if (diff.inDays <= 3 && !diff.isNegative) {
-        if (diff.inMinutes < 60) return "${diff.inMinutes}m ago ($formatted)";
-        if (diff.inHours < 24) return "${diff.inHours}h ago ($formatted)";
-        return "${diff.inDays}d ago ($formatted)";
-      }
-      return formatted;
-    } catch (e) { return "Recent"; }
   }
 
   @override
@@ -288,7 +272,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
             child: Column(
               children: [
                 _sectionHeader(width),
-                // if (_displayList.isNotEmpty) _buildHeroCarousel(width), // Commented out Hero
                 const SizedBox(height: 32),
                 Center(
                   child: Wrap(
@@ -299,10 +282,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
                             if (width < 432) {
                               return FittedBox(
                                 fit: BoxFit.scaleDown,
-                                child: _articleCard(a),
+                                child: ArticleTile(article: a, primaryColor: widget.primaryColor),
                               );
                             }
-                            return _articleCard(a);
+                            return ArticleTile(article: a, primaryColor: widget.primaryColor);
                           }).toList(),
                   ),
                 ),
@@ -328,31 +311,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  Widget _buildHeroCarousel(double width) {
-    final items = _displayList.take(3).toList();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AspectRatio(
-            aspectRatio: width > 700 ? 2.1 : 1.0,
-            child: PageView.builder(
-              controller: _heroController,
-              onPageChanged: (i) => setState(() => _heroIndex = i),
-              itemCount: items.length,
-              itemBuilder: (c, i) => _heroTile(items[i]),
-            ),
-          ),
-          if (width > 1000) ...[
-            Positioned(left: 15, child: _arrow(FontAwesomeIcons.chevronLeft, () => _heroController.previousPage(duration: const Duration(milliseconds: 500), curve: Curves.ease))),
-            Positioned(right: 15, child: _arrow(FontAwesomeIcons.chevronRight, () => _heroController.nextPage(duration: const Duration(milliseconds: 500), curve: Curves.ease))),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _heroTile(Article a) {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(a.link)),
@@ -363,90 +321,16 @@ class _NewsDashboardState extends State<NewsDashboard> {
             if (a.thumbnail.isNotEmpty) Positioned.fill(child: Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => Container())),
               Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, AppColors.appBackground])))),
               Positioned(top: 20, left: 20, child: Wrap(spacing: 8, children: [_badge("LATEST", widget.primaryColor, AppColors.appBackground), ...a.topics.map((t) => _badge(t, AppColors.textMain, AppColors.appBackground))])),
-              Positioned(bottom: 40, left: 40, right: 40, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("${a.source} • ${_formatDate(a.parsedDate)}".toUpperCase(), style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontWeight: FontWeight.bold)), const SizedBox(height: 12), Text(a.title, style: GoogleFonts.spaceGrotesk(fontSize: 42, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic))])),
+              Positioned(bottom: 40, left: 40, right: 40, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("${a.source} • ${DateFormat('dd/MM/yyyy').format(a.parsedDate)}".toUpperCase(), style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontWeight: FontWeight.bold)), const SizedBox(height: 12), Text(a.title, style: GoogleFonts.spaceGrotesk(fontSize: 42, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic))])),
           ],
         ),
       ),
     );
   }
 
-  Widget _articleCard(Article a) {
-    // SURGICAL TRIMMING LOGIC
-    const int charLimit = 85; 
-    String text = a.description.length > charLimit ? a.description.substring(0, charLimit) : a.description;
-    text = text.trimRight();
-    
-    if (text.endsWith('.')) {
-      String temp = text.substring(0, text.length - 1).trimRight();
-      int lastSpace = temp.lastIndexOf(' ');
-      text = lastSpace != -1 ? temp.substring(0, lastSpace) : temp;
-    } else if (RegExp(r'[,;:\-!?]$').hasMatch(text)) {
-      text = text.substring(0, text.length - 1);
-    }
-    text = text.trimRight();
+  Widget _badge(String t, Color bg, Color tc) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), color: bg, child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold)));
 
-    return Container(
-      width: 400, 
-      height: 580, 
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => launchUrl(Uri.parse(a.link)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 4 / 5, 
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28), 
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.tileBackground,
-                    border: Border.all(color: AppColors.appBackground),
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  child: Stack(
-                    children: [
-                      if (a.thumbnail.isNotEmpty) 
-                        Positioned.fill(child: Image.network(a.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
-                      Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
-                      Positioned(top: 12, left: 12, child: Wrap(spacing: 4, runSpacing: 4, children: a.topics.map((t) => _badge(t, Colors.white, Colors.black)).toList())),
-                      Positioned(bottom: 16, left: 16, right: 16, child: Text(a.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_formatDate(a.parsedDate).toUpperCase(), style: const TextStyle(fontSize: 8, color: AppColors.textSubtle, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  RichText(
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    text: TextSpan(
-                      style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white),
-                      children: [
-                        TextSpan(
-                          text: "${a.source}  ",
-                          style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.w900, fontSize: 11),
-                        ),
-                        TextSpan(text: text),
-                        const TextSpan(text: "... "),
-                        const TextSpan(text: "more", style: TextStyle(color: AppColors.textSubtle)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _arrow(IconData i, VoidCallback o) => GestureDetector(onTap: o, child: Container(padding: const EdgeInsets.all(10), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: Icon(i, size: 16)));
 
   Widget _buildSidebar() {
     return Drawer(
@@ -498,7 +382,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          border: Border.all(color: widget.primaryColor.withOpacity(0.3)),
+          border: Border.all(color: widget.primaryColor.withValues(alpha: 0.3)),
           color: AppColors.highlightOverlay,
         ),
         child: Row(
@@ -565,7 +449,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                             decoration: BoxDecoration(
                               color: Colors.greenAccent, 
                               shape: BoxShape.circle,
-                              boxShadow: [BoxShadow(color: Colors.greenAccent.withOpacity(0.5), blurRadius: 4, spreadRadius: 1)],
+                              boxShadow: [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.5), blurRadius: 4, spreadRadius: 1)],
                             ),
                           )
                         ],
@@ -667,14 +551,153 @@ class _NewsDashboardState extends State<NewsDashboard> {
     );
   }
 
-  Widget _badge(String t, Color bg, Color tc) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), color: bg, child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold)));
-
-  Widget _arrow(IconData i, VoidCallback o) => GestureDetector(onTap: o, child: Container(padding: const EdgeInsets.all(10), decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle), child: Icon(i, size: 16)));
-
   Widget _loader() {
     double progress = _totalSources > 0 ? _completedSources / _totalSources : 0;
     return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [CircularProgressIndicator(value: (progress == 0) ? null : progress, color: widget.primaryColor, strokeWidth: 6), const SizedBox(height: 30), Text("${(progress * 100).toInt()}%", style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold)), const SizedBox(height: 10), Text("RECEIVING SIGNALS...", style: TextStyle(color: widget.primaryColor, fontSize: 10, letterSpacing: 4)), const SizedBox(height: 20), Text(_statusMessage.toUpperCase(), style: const TextStyle(color: AppColors.textSubtle, fontSize: 9, letterSpacing: 1))]));
   }
 
   Widget _emptyState() => const Center(child: Text("NO SIGNALS FOUND"));
+}
+
+class ArticleTile extends StatefulWidget {
+  final Article article;
+  final Color primaryColor;
+  const ArticleTile({super.key, required this.article, required this.primaryColor});
+
+  @override
+  State<ArticleTile> createState() => _ArticleTileState();
+}
+
+class _ArticleTileState extends State<ArticleTile> {
+  final PageController _tileController = PageController(); // NEW
+  int _currentIndex = 0;
+  Color? _extractedColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _extractColor();
+  }
+
+  @override
+  void dispose() {
+    _tileController.dispose(); // NEW
+    super.dispose();
+  }
+
+  void _extractColor() async {
+    if (widget.article.thumbnail.isEmpty) return;
+    try {
+      final pg = await PaletteGenerator.fromImageProvider(NetworkImage(widget.article.thumbnail));
+      if (mounted) setState(() => _extractedColor = pg.dominantColor?.color);
+    } catch (_) {}
+  }
+
+  String _formatDate(DateTime postDate) {
+    Duration diff = DateTime.now().difference(postDate);
+    String formatted = DateFormat('dd/MM/yyyy').format(postDate);
+    if (diff.inDays <= 3 && !diff.isNegative) {
+      if (diff.inMinutes < 60) return "${diff.inMinutes}m ago ($formatted)";
+      if (diff.inHours < 24) return "${diff.inHours}h ago ($formatted)";
+      return "${diff.inDays}d ago ($formatted)";
+    }
+    return formatted;
+  }
+
+  Widget _badge(String t, Color bg, Color tc) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), color: bg, child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold)));
+
+  // Mini-Arrow for Card
+  Widget _miniArrow(IconData i, VoidCallback o, bool left) {
+    return GestureDetector(
+      onTap: o,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle, border: Border.all(color: Colors.white10)),
+        child: Icon(i, size: 10, color: Colors.white),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double width = MediaQuery.of(context).size.width;
+    String text = widget.article.description.trim();
+    if (text.length > 85) text = text.substring(0, 85);
+    if (text.endsWith('.')) {
+      List<String> words = text.split(' ');
+      if (words.length > 1) { words.removeLast(); text = words.join(' '); }
+    }
+    text = text.trimRight();
+
+    return Container(
+      width: 400, height: 580, color: Colors.transparent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 4 / 5,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Stack(
+                children: [
+                  PageView(
+                    controller: _tileController, // NEW
+                    onPageChanged: (i) => setState(() => _currentIndex = i),
+                    children: [
+                      InkWell(
+                        onTap: () => launchUrl(Uri.parse(widget.article.link)),
+                        child: Container(
+                          decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.appBackground), borderRadius: BorderRadius.circular(28)),
+                          child: Stack(
+                            children: [
+                              if (widget.article.thumbnail.isNotEmpty) Positioned.fill(child: Image.network(widget.article.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
+                              Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
+                              Positioned(top: 12, left: 12, child: Wrap(spacing: 4, runSpacing: 4, children: widget.article.topics.map((t) => _badge(t, Colors.white, Colors.black)).toList())),
+                              Positioned(bottom: 16, left: 16, right: 16, child: Text(widget.article.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(color: _extractedColor?.withValues(alpha: 0.8) ?? AppColors.tileBackground, borderRadius: BorderRadius.circular(28), border: Border.all(color: AppColors.appBackground)),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(FontAwesomeIcons.circleInfo, color: Colors.white, size: 24),
+                            const SizedBox(height: 20),
+                            Text(widget.article.title.toUpperCase(), textAlign: TextAlign.center, style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white)),
+                            const SizedBox(height: 20),
+                            ElevatedButton(onPressed: () => launchUrl(Uri.parse(widget.article.link)), style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, shape: const StadiumBorder()), child: const Text("READ FULL STORY", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Pagination Dots
+                  Positioned(bottom: 12, left: 0, right: 0, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(2, (index) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Icon(FontAwesomeIcons.circle, size: 6, color: _currentIndex == index ? widget.primaryColor : Colors.white24))))),
+                  // DESKTOP ARROWS (Visible only when width > 500)
+                  if (width > 500) ...[
+                    if (_currentIndex == 1) Positioned(left: 10, top: 0, bottom: 0, child: Center(child: _miniArrow(FontAwesomeIcons.chevronLeft, () => _tileController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.ease), true))),
+                    if (_currentIndex == 0) Positioned(right: 10, top: 0, bottom: 0, child: Center(child: _miniArrow(FontAwesomeIcons.chevronRight, () => _tileController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease), false))),
+                  ]
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_formatDate(widget.article.parsedDate).toUpperCase(), style: const TextStyle(fontSize: 8, color: AppColors.textSubtle, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                RichText(maxLines: 2, overflow: TextOverflow.ellipsis, text: TextSpan(style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white), children: [TextSpan(text: "${widget.article.source}  ", style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.w900, fontSize: 11)), TextSpan(text: text), const TextSpan(text: "... "), const TextSpan(text: "more", style: TextStyle(color: AppColors.textSubtle))])),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
 }
