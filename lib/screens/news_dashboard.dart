@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:palette_generator/palette_generator.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_config.dart';
@@ -25,12 +26,14 @@ class NewsDashboard extends StatefulWidget {
 
 class _NewsDashboardState extends State<NewsDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final PageController _heroController = PageController();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
   List<Article> _allArticles = [];
   List<Article> _displayList = [];
   int _visibleCount = 12; 
+  int _tabIndex = 0;
   bool _isLoading = true;
   bool _extendedMode = false;
   bool _prettyMode = false;
@@ -49,6 +52,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   @override
   void dispose() {
+    _heroController.dispose();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -100,19 +104,35 @@ class _NewsDashboardState extends State<NewsDashboard> {
           String rawXml = utf8.decode(response.bodyBytes, allowMalformed: true);
           final parsed = FeedParser.parse(rawXml, entry.value);
 
-          // FIXED: Added Global Source Filtering for Jacobin etc.
-          results.addAll(parsed.where((article) {
-            if (seenLinks.contains(article.link) || article.link.isEmpty) return false;
+          List<Article> processed = await Future.wait(parsed.map((a) async {
+            Color? extracted;
+            if (a.thumbnail.isNotEmpty) {
+              try {
+                final pg = await PaletteGenerator.fromImageProvider(
+                  NetworkImage(a.thumbnail),
+                  maximumColorCount: 10,
+                ).timeout(const Duration(milliseconds: 800));
+                extracted = pg.vibrantColor?.color ?? pg.dominantColor?.color;
+              } catch (_) {}
+            }
+            return Article(
+              title: a.title, link: a.link, parsedDate: a.parsedDate, 
+              description: a.description, source: a.source, 
+              thumbnail: a.thumbnail, topics: a.topics, dominantColor: extracted
+            );
+          }));
+
+          for (var article in processed) {
+            if (seenLinks.contains(article.link) || article.link.isEmpty) continue;
 
             if (AppConfig.globalSources.containsValue(entry.value)) {
-              final searchable = "${article.title} ${article.description}".toLowerCase();
-              final isRelevant = AppConfig.auKeywords.any((k) => searchable.contains(k.toLowerCase()));
-              if (!isRelevant) return false;
+              String searchable = "${article.title} ${article.description}".toLowerCase();
+              if (!AppConfig.auKeywords.any((k) => searchable.contains(k))) continue;
             }
 
             seenLinks.add(article.link);
-            return true;
-          }));
+            results.add(article);
+          }
         }
       } catch (e) { debugPrint("Link failure: $e"); } 
       finally { if (mounted) setState(() => _completedSources++); }
@@ -153,10 +173,56 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return Scaffold(
       key: _scaffoldKey,
       endDrawer: _buildSidebar(),
+      bottomNavigationBar: _buildBottomNav(),
       body: Column(
         children: [
           _fixedTopSection(width),
-          Expanded(child: _isLoading ? _loader() : (_allArticles.isEmpty ? _emptyState() : _mainScrollArea(width))),
+          Expanded(
+            child: _tabIndex == 1 ? _videoPlaceholder() : (_isLoading ? _loader() : _refreshWrapper(width)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _refreshWrapper(double width) {
+    return RefreshIndicator(
+      onRefresh: _fetchNews,
+      color: widget.primaryColor,
+      backgroundColor: AppColors.appSurface,
+      child: _allArticles.isEmpty ? _emptyState() : _mainScrollArea(width),
+    );
+  }
+
+  Widget _videoPlaceholder() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(FontAwesomeIcons.videoSlash, size: 40, color: widget.primaryColor.withValues(alpha: 0.3)),
+          const SizedBox(height: 20),
+          Text("VIDEO SIGNALS OFFLINE", style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold, letterSpacing: 2)),
+          const Text("Future feature currently in development.", style: TextStyle(color: AppColors.textMuted, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.borderSubtle))),
+      child: BottomNavigationBar(
+        currentIndex: _tabIndex,
+        onTap: (i) => setState(() => _tabIndex = i),
+        backgroundColor: AppColors.appBackground,
+        selectedItemColor: widget.primaryColor,
+        unselectedItemColor: Colors.white24,
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(FontAwesomeIcons.house, size: 18), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(FontAwesomeIcons.play, size: 18), label: "Videos"),
         ],
       ),
     );
@@ -218,8 +284,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
   }
 
   Widget _mainScrollArea(double width) {
+    const double articleGap = 30.0;
     return ListView(
       controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         Center(
           child: Container(
@@ -230,7 +298,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                 const SizedBox(height: 32),
                 Center(
                   child: Wrap(
-                    spacing: 30, runSpacing: 30, alignment: WrapAlignment.center,
+                    spacing: articleGap, runSpacing: articleGap, alignment: WrapAlignment.center,
                     children: _displayList.take(_visibleCount).map((a) { 
                       if (width < 432) return FittedBox(fit: BoxFit.scaleDown, child: ArticleTile(article: a, primaryColor: widget.primaryColor));
                       return ArticleTile(article: a, primaryColor: widget.primaryColor);
@@ -384,7 +452,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     Row(children: [Icon(FontAwesomeIcons.circleInfo, size: 16, color: widget.primaryColor), const SizedBox(width: 10), const Text("PROJECT BRIEFING", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 4))]),
                     const SizedBox(height: 10),
                     Text("THE RADICAL", style: GoogleFonts.spaceGrotesk(fontSize: 40, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
-                    const Text("v0.1.1", style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                    const Text("v0.1.2", style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
                   ]), 
                   IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(FontAwesomeIcons.xmark, size: 18))
                 ]),
