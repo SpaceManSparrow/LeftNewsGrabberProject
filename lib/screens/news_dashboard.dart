@@ -30,16 +30,16 @@ class NewsDashboard extends StatefulWidget {
 
 class _NewsDashboardState extends State<NewsDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final PageController _heroController = PageController();
+  final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
   List<Article> _allArticles = [];
   List<Article> _displayList = [];
+  int _visibleCount = 12; 
   bool _isLoading = true;
   bool _extendedMode = false;
   bool _prettyMode = false;
   String _activeFilter = "ALL";
-  Timer? _autoScrollTimer;
 
   int _totalSources = 0;
   int _completedSources = 0;
@@ -48,15 +48,23 @@ class _NewsDashboardState extends State<NewsDashboard> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_scrollListener);
     _bootSequence();
   }
 
   @override
   void dispose() {
-    _heroController.dispose();
-    _autoScrollTimer?.cancel();
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400) {
+      if (_visibleCount < _displayList.length) {
+        setState(() => _visibleCount += 12);
+      }
+    }
   }
 
   Future<void> _bootSequence() async {
@@ -127,7 +135,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
         _displayList = results;
         _isLoading = false;
         _applyLogic();
-        _startCarousel();
       });
     }
   }
@@ -142,6 +149,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         filtered = filtered.where((a) => a.thumbnail.isNotEmpty);
       }
       _displayList = filtered.toList();
+      _visibleCount = 12; 
     });
   }
 
@@ -151,17 +159,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
       .where((a) => a.title.toLowerCase().contains(q.toLowerCase()) ||
       a.source.toLowerCase().contains(q.toLowerCase()))
       .toList();
-    });
-  }
-
-  void _startCarousel() {
-    _autoScrollTimer?.cancel();
-    if (_displayList.length < 3) return;
-    _autoScrollTimer = Timer.periodic(const Duration(seconds: 5), (t) {
-      if (_heroController.hasClients) {
-        int next = (_heroController.page?.toInt() ?? 0 + 1) % 3;
-        _heroController.animateToPage(next, duration: const Duration(milliseconds: 800), curve: Curves.easeInOut);
-      }
+      _visibleCount = 12;
     });
   }
 
@@ -263,6 +261,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     const double articleGap = 30.0;
 
     return ListView(
+      controller: _scrollController,
       children: [
         Center(
           child: Container(
@@ -277,15 +276,15 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     spacing: articleGap,
                     runSpacing: articleGap,
                     alignment: WrapAlignment.center,
-                    children: _displayList.map((a) { 
-                            if (width < 432) {
-                              return FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: ArticleTile(article: a, primaryColor: widget.primaryColor),
-                              );
-                            }
-                            return ArticleTile(article: a, primaryColor: widget.primaryColor);
-                          }).toList(),
+                    children: _displayList.take(_visibleCount).map((a) { 
+                      if (width < 432) {
+                        return FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: ArticleTile(article: a, primaryColor: widget.primaryColor),
+                        );
+                      }
+                      return ArticleTile(article: a, primaryColor: widget.primaryColor);
+                    }).toList(),
                   ),
                 ),
               ],
@@ -549,12 +548,12 @@ class ArticleTile extends StatefulWidget {
 class _ArticleTileState extends State<ArticleTile> {
   final PageController _tileController = PageController();
   int _currentIndex = 0;
-  ColorScheme? _dynamicScheme;
+  Color? _vibrantColor;
 
   @override
   void initState() {
     super.initState();
-    _generateScheme();
+    _extractVibrantColor();
   }
 
   @override
@@ -563,26 +562,12 @@ class _ArticleTileState extends State<ArticleTile> {
     super.dispose();
   }
 
-  void _generateScheme() async {
+  void _extractVibrantColor() async {
     if (widget.article.thumbnail.isEmpty) return;
     try {
-      final scheme = await ColorScheme.fromImageProvider(
-        provider: NetworkImage(widget.article.thumbnail),
-        brightness: Brightness.dark,
-      );
-      if (mounted) setState(() => _dynamicScheme = scheme);
+      final pg = await PaletteGenerator.fromImageProvider(NetworkImage(widget.article.thumbnail));
+      if (mounted) setState(() => _vibrantColor = pg.vibrantColor?.color ?? pg.dominantColor?.color);
     } catch (_) {}
-  }
-
-  String _formatDate(DateTime postDate) {
-    Duration diff = DateTime.now().difference(postDate);
-    String formatted = DateFormat('dd/MM/yyyy').format(postDate);
-    if (diff.inDays <= 3 && !diff.isNegative) {
-      if (diff.inMinutes < 60) return "${diff.inMinutes}m ago ($formatted)";
-      if (diff.inHours < 24) return "${diff.inHours}h ago ($formatted)";
-      return "${diff.inDays}d ago ($formatted)";
-    }
-    return formatted;
   }
 
   Widget _miniArrow(IconData i, VoidCallback o) {
@@ -608,7 +593,7 @@ class _ArticleTileState extends State<ArticleTile> {
     snippet = snippet.trimRight();
 
     String fullDesc = widget.article.description;
-    if (fullDesc.length > 280) fullDesc = "${fullDesc.substring(0, 280)}...";
+    if (fullDesc.length > 250) fullDesc = "${fullDesc.substring(0, 250)}...";
 
     return Container(
       width: 400, height: 580, color: Colors.transparent,
@@ -625,41 +610,26 @@ class _ArticleTileState extends State<ArticleTile> {
                     controller: _tileController,
                     onPageChanged: (i) => setState(() => _currentIndex = i),
                     children: [
+                      // Slide 1
                       InkWell(
                         onTap: () => launchUrl(Uri.parse(widget.article.link)),
                         child: Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.tileBackground, 
-                            border: Border.all(color: AppColors.appBackground), 
-                            borderRadius: BorderRadius.circular(28),
-                          ),
+                          decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.appBackground), borderRadius: BorderRadius.circular(28)),
                           child: Stack(
                             children: [
                               if (widget.article.thumbnail.isNotEmpty) Positioned.fill(child: Image.network(widget.article.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
                               Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
                               Positioned(top: 12, left: 12, child: Wrap(spacing: 4, runSpacing: 4, children: widget.article.topics.map((t) => _badge(t, Colors.white, Colors.black)).toList())),
                               Positioned(bottom: 24, left: 16, right: 16, child: Text(widget.article.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
-                              // FIXED: Added Link icon in bottom-right corner of Slide 1
-                              Positioned(
-                                bottom: 24, 
-                                right: 16, 
-                                child: Icon(
-                                  FontAwesomeIcons.arrowUpRightFromSquare, 
-                                  color: Colors.white.withValues(alpha: 0.6), 
-                                  size: 14
-                                )
-                              ),
+                              Positioned(bottom: 24, right: 16, child: Icon(FontAwesomeIcons.arrowUpRightFromSquare, color: Colors.white.withValues(alpha: 0.6), size: 14)),
                             ],
                           ),
                         ),
                       ),
+                      // Slide 2
                       Container(
                         padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          color: _dynamicScheme?.primaryContainer.withValues(alpha: 0.95) ?? AppColors.tileBackground, 
-                          borderRadius: BorderRadius.circular(28), 
-                          border: Border.all(color: AppColors.appBackground),
-                        ),
+                        decoration: BoxDecoration(color: _vibrantColor?.withValues(alpha: 0.9) ?? AppColors.tileBackground, borderRadius: BorderRadius.circular(28), border: Border.all(color: AppColors.appBackground)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -675,7 +645,7 @@ class _ArticleTileState extends State<ArticleTile> {
                       ),
                     ],
                   ),
-                  Positioned(bottom: 12, left: 0, right: 0, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(2, (index) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Icon(FontAwesomeIcons.circle, size: 6, color: _currentIndex == index ? widget.primaryColor : Colors.white24))))),
+                  Positioned(bottom: 12, left: 0, right: 0, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(2, (index) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Icon(FontAwesomeIcons.circle, size: 6, color: _currentIndex == index ? Colors.white : Colors.white24))))),
                   if (width > 500) ...[
                     if (_currentIndex == 1) Positioned(left: 10, top: 0, bottom: 0, child: Center(child: _miniArrow(FontAwesomeIcons.chevronLeft, () => _tileController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.ease)))),
                     if (_currentIndex == 0) Positioned(right: 10, top: 0, bottom: 0, child: Center(child: _miniArrow(FontAwesomeIcons.chevronRight, () => _tileController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease)))),
