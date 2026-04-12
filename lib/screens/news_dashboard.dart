@@ -7,7 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:palette_generator/palette_generator.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_config.dart';
@@ -26,7 +25,6 @@ class NewsDashboard extends StatefulWidget {
 
 class _NewsDashboardState extends State<NewsDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final PageController _heroController = PageController();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
@@ -52,7 +50,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   @override
   void dispose() {
-    _heroController.dispose();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -104,25 +101,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
           String rawXml = utf8.decode(response.bodyBytes, allowMalformed: true);
           final parsed = FeedParser.parse(rawXml, entry.value);
 
-          List<Article> processed = await Future.wait(parsed.map((a) async {
-            Color? extracted;
-            if (a.thumbnail.isNotEmpty) {
-              try {
-                final pg = await PaletteGenerator.fromImageProvider(
-                  NetworkImage(a.thumbnail),
-                  maximumColorCount: 10,
-                ).timeout(const Duration(milliseconds: 800));
-                extracted = pg.vibrantColor?.color ?? pg.dominantColor?.color;
-              } catch (_) {}
-            }
-            return Article(
-              title: a.title, link: a.link, parsedDate: a.parsedDate, 
-              description: a.description, source: a.source, 
-              thumbnail: a.thumbnail, topics: a.topics, dominantColor: extracted
-            );
-          }));
-
-          for (var article in processed) {
+          for (var article in parsed) {
             if (seenLinks.contains(article.link) || article.link.isEmpty) continue;
 
             if (AppConfig.globalSources.containsValue(entry.value)) {
@@ -452,7 +431,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                     Row(children: [Icon(FontAwesomeIcons.circleInfo, size: 16, color: widget.primaryColor), const SizedBox(width: 10), const Text("PROJECT BRIEFING", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 4))]),
                     const SizedBox(height: 10),
                     Text("THE RADICAL", style: GoogleFonts.spaceGrotesk(fontSize: 40, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
-                    const Text("v0.1.2", style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                    const Text("v0.1.1", style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
                   ]), 
                   IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(FontAwesomeIcons.xmark, size: 18))
                 ]),
