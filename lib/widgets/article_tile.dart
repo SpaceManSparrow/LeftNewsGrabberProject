@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:palette_generator/palette_generator.dart';
 import '../models/article.dart';
 import '../core/app_colors.dart';
+import '../services/feed_parser.dart';
 
 class ArticleTile extends StatefulWidget {
   final Article article;
@@ -20,11 +21,13 @@ class _ArticleTileState extends State<ArticleTile> {
   final PageController _tileController = PageController();
   int _currentIndex = 0;
   Color? _extractedColor;
+  String? _finalThumbnail;
 
   @override
   void initState() {
     super.initState();
-    _extractColor();
+    _finalThumbnail = widget.article.thumbnail;
+    _processHeavyData();
   }
 
   @override
@@ -33,14 +36,27 @@ class _ArticleTileState extends State<ArticleTile> {
     super.dispose();
   }
 
-  void _extractColor() async {
+  // LAZY PROCESSING: Runs only for tiles that enter existence
+  void _processHeavyData() async {
+    // 1. Check if color already exists from dashboard fetch
     if (widget.article.dominantColor != null) {
-      setState(() => _extractedColor = widget.article.dominantColor);
+      if (mounted) setState(() => _extractedColor = widget.article.dominantColor);
       return;
     }
-    if (widget.article.thumbnail.isEmpty) return;
+
+    // 2. Fallback Scraper if thumbnail is missing
+    if (_finalThumbnail == null || _finalThumbnail!.isEmpty) {
+      final scraped = await FeedParser.scrapeUrlForImage(widget.article.link);
+      if (mounted && scraped.isNotEmpty) {
+        setState(() => _finalThumbnail = FeedParser.wrapProxy(scraped));
+      }
+    }
+
+    // 3. Color Extraction
+    final targetImage = _finalThumbnail ?? "";
+    if (targetImage.isEmpty) return;
     try {
-      final pg = await PaletteGenerator.fromImageProvider(NetworkImage(widget.article.thumbnail));
+      final pg = await PaletteGenerator.fromImageProvider(NetworkImage(targetImage));
       if (mounted) setState(() => _extractedColor = pg.vibrantColor?.color ?? pg.dominantColor?.color);
     } catch (_) {}
   }
@@ -59,14 +75,17 @@ class _ArticleTileState extends State<ArticleTile> {
   @override
   Widget build(BuildContext context) {
     double width = MediaQuery.of(context).size.width;
-    
-    // Caption Trimming Logic
+
+    // 1. Surgical Caption Trimming Logic
+    const int charLimit = 85;
     String snippet = widget.article.description.trim();
-    if (snippet.length > 85) snippet = snippet.substring(0, 85);
+    if (snippet.length > charLimit) snippet = snippet.substring(0, charLimit);
     snippet = snippet.trimRight();
+
     if (snippet.endsWith('.')) {
-      List<String> words = snippet.split(' ');
-      if (words.length > 1) { words.removeLast(); snippet = words.join(' '); }
+      String temp = snippet.substring(0, snippet.length - 1).trimRight();
+      int lastSpace = temp.lastIndexOf(' ');
+      snippet = lastSpace != -1 ? temp.substring(0, lastSpace) : temp;
     } else if (RegExp(r'[,;:\-!?]$').hasMatch(snippet)) {
       snippet = snippet.substring(0, snippet.length - 1);
     }
@@ -76,7 +95,9 @@ class _ArticleTileState extends State<ArticleTile> {
     if (fullDesc.length > 250) fullDesc = "${fullDesc.substring(0, 250)}...";
 
     return Container(
-      width: 400, height: 640, color: Colors.transparent,
+      width: 400,
+      height: 640,
+      color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -85,9 +106,16 @@ class _ArticleTileState extends State<ArticleTile> {
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
             child: Row(
               children: [
-                CircleAvatar(radius: 14, backgroundColor: AppColors.appSurface, child: const Icon(FontAwesomeIcons.user, size: 12, color: Colors.white24)),
+                const CircleAvatar(
+                  radius: 14,
+                  backgroundColor: AppColors.appSurface,
+                  child: Icon(FontAwesomeIcons.user, size: 12, color: Colors.white24),
+                ),
                 const SizedBox(width: 10),
-                Text(widget.article.author ?? widget.article.source, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                Text(
+                  widget.article.author ?? widget.article.source,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                ),
               ],
             ),
           ),
@@ -124,28 +152,41 @@ class _ArticleTileState extends State<ArticleTile> {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(widget.article.link)),
       child: Container(
-        decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.appBackground), borderRadius: BorderRadius.circular(28)),
+        decoration: BoxDecoration(
+          color: AppColors.tileBackground,
+          border: Border.all(color: AppColors.appBackground),
+          borderRadius: BorderRadius.circular(28),
+        ),
         child: Stack(
           children: [
-            if (widget.article.thumbnail.isNotEmpty) Positioned.fill(child: Image.network(widget.article.thumbnail, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
+            if (_finalThumbnail != null && _finalThumbnail!.isNotEmpty)
+              Positioned.fill(child: Image.network(_finalThumbnail!, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
             Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
-            
-            // Topics Stack Downward
+
+            // Topics stack downward from top-left
             Positioned(
-              top: 12, left: 12, 
+              top: 12,
+              left: 12,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: widget.article.topics.map((t) => Padding(padding: const EdgeInsets.only(bottom: 4), child: badge(t, Colors.white, Colors.black))).toList(),
               ),
             ),
 
-            // Source Bar Top-Right
+            // Source name at top-right
             Positioned(
-              top: 12, right: 0,
+              top: 12,
+              right: 0,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
-                decoration: BoxDecoration(color: widget.primaryColor, borderRadius: const BorderRadius.only(topLeft: Radius.circular(8), bottomLeft: Radius.circular(8))),
-                child: Text(widget.article.source.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                decoration: BoxDecoration(
+                  color: widget.primaryColor,
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(8), bottomLeft: Radius.circular(8)),
+                ),
+                child: Text(
+                  widget.article.source.toUpperCase(),
+                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                ),
               ),
             ),
 
@@ -160,7 +201,11 @@ class _ArticleTileState extends State<ArticleTile> {
   Widget _buildInfoSlide(String fullDesc) {
     return Container(
       padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(color: Color.lerp(_extractedColor, Colors.black, 0.6)?.withValues(alpha: 0.95) ?? AppColors.tileBackground, borderRadius: BorderRadius.circular(28), border: Border.all(color: AppColors.appBackground)),
+      decoration: BoxDecoration(
+        color: Color.lerp(_extractedColor, Colors.black, 0.6)?.withValues(alpha: 0.95) ?? AppColors.tileBackground,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.appBackground),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -170,7 +215,20 @@ class _ArticleTileState extends State<ArticleTile> {
           const SizedBox(height: 16),
           Expanded(child: Text(fullDesc, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5, fontWeight: FontWeight.w400))),
           const SizedBox(height: 16),
-          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => launchUrl(Uri.parse(widget.article.link)), style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), elevation: 0, padding: const EdgeInsets.symmetric(vertical: 18)), child: const Text("OPEN ARTICLE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)))),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => launchUrl(Uri.parse(widget.article.link)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+              ),
+              child: const Text("OPEN ARTICLE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
+            ),
+          ),
         ],
       ),
     );
@@ -184,7 +242,19 @@ class _ArticleTileState extends State<ArticleTile> {
         children: [
           Text(DateFormat('dd/MM/yyyy').format(widget.article.parsedDate).toUpperCase(), style: const TextStyle(fontSize: 8, color: AppColors.textSubtle, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          RichText(maxLines: 2, overflow: TextOverflow.ellipsis, text: TextSpan(style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white), children: [TextSpan(text: "${widget.article.source}  ", style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.w900, fontSize: 11)), TextSpan(text: snippet), const TextSpan(text: "... "), const TextSpan(text: "more", style: TextStyle(color: AppColors.textSubtle))])),
+          RichText(
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white),
+              children: [
+                TextSpan(text: "${widget.article.source}  ", style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.w900, fontSize: 11)),
+                TextSpan(text: snippet),
+                const TextSpan(text: "... "),
+                const TextSpan(text: "more", style: TextStyle(color: AppColors.textSubtle)),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -192,7 +262,7 @@ class _ArticleTileState extends State<ArticleTile> {
 }
 
 Widget badge(String t, Color bg, Color tc) => Container(
-  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
-  color: bg, 
-  child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold))
-);
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      color: bg,
+      child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold)),
+    );

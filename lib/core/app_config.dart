@@ -34,13 +34,19 @@ class AppConfig {
     "https://www.thenews.coop/country/oceania/feed":
     "CO-OP NEWS",
     "https://seqldiww.org/category/australia/feed":
-    "IWW (SOUTH EAST QUEENSLAND)"
+    "IWW (SOUTH EAST QUEENSLAND)",
+    "https://freedomnews.org.uk/tag/australia/feed":
+    "FREEDOM",
+    "https://disputesreport.substack.com/feed":
+    "DISPUTES REPORT"
   };
 
   // Global sources that are filtered for Australian keywords
   static const Map<String, String> globalSources = {
     "https://jacobin.com/feed":
-    "JACOBIN"
+    "JACOBIN",
+    "https://themilitant.com/feed":
+    "THE MILITANT"
   };
 
   // Optional sources enabled via "Extended Coverage" toggle
@@ -57,23 +63,40 @@ class AppConfig {
 
   // Keywords used to filter global sources for relevance to Australia
   static const List<String> auKeywords = [
-    "australia",
-    "australian",
-    "sydney",
-    "melbourne",
-    "brisbane",
-    "perth",
-    "adelaide",
-    "canberra",
-    "hobart",
-    "darwin",
-    "victoria",
-    "queensland",
-    "tasmania",
-    "nsw",
-    "vic",
-    "qld",
-    "western australia"
+  "australia",
+  "australian",
+
+  "new south wales",
+  "nsw",
+  "sydney",
+
+  "victoria",
+  "vic",
+  "melbourne",
+
+  "queensland",
+  "qld",
+  "brisbane",
+
+  "western australia",
+  "wa",
+  "perth",
+
+  "south australia",
+  "sa",
+  "adelaide",
+
+  "tasmania",
+  "tas",
+  "hobart",
+
+  "australian capital territory",
+  "act",
+  "canberra",
+
+  "northern territory",
+  "nt",
+  "darwin"
   ];
 
   // Topic classification map (If an article contains a keyword, it gets tagged)

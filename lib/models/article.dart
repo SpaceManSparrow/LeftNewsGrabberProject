@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// ===========================================================================
+/// ARTICLE DATA MODEL
+/// ===========================================================================
 class Article {
   final String title, link, description, source, thumbnail;
   final String? author; 
