@@ -26,6 +26,8 @@ class _ArticleTileState extends State<ArticleTile> {
   @override
   void initState() {
     super.initState();
+    // Using a microtask or local check to ensure the state updates 
+    // are fresh for the specifically keyed widget.
     _finalThumbnail = widget.article.thumbnail;
     _processHeavyData();
   }
@@ -36,9 +38,8 @@ class _ArticleTileState extends State<ArticleTile> {
     super.dispose();
   }
 
-  // LAZY PROCESSING: Runs only for tiles that enter existence
   void _processHeavyData() async {
-    // 1. Check if color already exists from dashboard fetch
+    // 1. Check if color already exists
     if (widget.article.dominantColor != null) {
       if (mounted) setState(() => _extractedColor = widget.article.dominantColor);
       return;
@@ -75,7 +76,7 @@ class _ArticleTileState extends State<ArticleTile> {
   @override
   Widget build(BuildContext context) {
     double width = MediaQuery.of(context).size.width;
-
+    
     // 1. Surgical Caption Trimming Logic
     const int charLimit = 85;
     String snippet = widget.article.description.trim();
@@ -95,9 +96,7 @@ class _ArticleTileState extends State<ArticleTile> {
     if (fullDesc.length > 250) fullDesc = "${fullDesc.substring(0, 250)}...";
 
     return Container(
-      width: 400,
-      height: 640,
-      color: Colors.transparent,
+      width: 400, height: 640, color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -152,45 +151,33 @@ class _ArticleTileState extends State<ArticleTile> {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(widget.article.link)),
       child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.tileBackground,
-          border: Border.all(color: AppColors.appBackground),
-          borderRadius: BorderRadius.circular(28),
-        ),
+        decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.appBackground), borderRadius: BorderRadius.circular(28)),
         child: Stack(
           children: [
             if (_finalThumbnail != null && _finalThumbnail!.isNotEmpty)
               Positioned.fill(child: Image.network(_finalThumbnail!, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
             Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
-
-            // Topics stack downward from top-left
+            
+            // Topics
             Positioned(
-              top: 12,
-              left: 12,
+              top: 12, left: 12, 
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: widget.article.topics.map((t) => Padding(padding: const EdgeInsets.only(bottom: 4), child: badge(t, Colors.white, Colors.black))).toList(),
               ),
             ),
 
-            // Source name at top-right
+            // Source name bar
             Positioned(
-              top: 12,
-              right: 0,
+              top: 12, right: 0,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
-                decoration: BoxDecoration(
-                  color: widget.primaryColor,
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(8), bottomLeft: Radius.circular(8)),
-                ),
-                child: Text(
-                  widget.article.source.toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.2),
-                ),
+                decoration: BoxDecoration(color: widget.primaryColor, borderRadius: const BorderRadius.only(topLeft: Radius.circular(8), bottomLeft: Radius.circular(8))),
+                child: Text(widget.article.source.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
               ),
             ),
 
-            Positioned(bottom: 24, left: 16, right: 16, child: Text(widget.article.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
+            Positioned(bottom: 24, left: 16, right: 40, child: Text(widget.article.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
             Positioned(bottom: 24, right: 16, child: Icon(FontAwesomeIcons.arrowUpRightFromSquare, color: Colors.white.withValues(alpha: 0.6), size: 14)),
           ],
         ),
@@ -202,8 +189,8 @@ class _ArticleTileState extends State<ArticleTile> {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Color.lerp(_extractedColor, Colors.black, 0.6)?.withValues(alpha: 0.95) ?? AppColors.tileBackground,
-        borderRadius: BorderRadius.circular(28),
+        color: Color.lerp(_extractedColor, Colors.black, 0.6)?.withValues(alpha: 0.95) ?? AppColors.tileBackground, 
+        borderRadius: BorderRadius.circular(28), 
         border: Border.all(color: AppColors.appBackground),
       ),
       child: Column(
@@ -215,20 +202,7 @@ class _ArticleTileState extends State<ArticleTile> {
           const SizedBox(height: 16),
           Expanded(child: Text(fullDesc, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5, fontWeight: FontWeight.w400))),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => launchUrl(Uri.parse(widget.article.link)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 18),
-              ),
-              child: const Text("OPEN ARTICLE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
-            ),
-          ),
+          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => launchUrl(Uri.parse(widget.article.link)), style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), elevation: 0, padding: const EdgeInsets.symmetric(vertical: 18)), child: const Text("OPEN ARTICLE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)))),
         ],
       ),
     );
@@ -242,19 +216,7 @@ class _ArticleTileState extends State<ArticleTile> {
         children: [
           Text(DateFormat('dd/MM/yyyy').format(widget.article.parsedDate).toUpperCase(), style: const TextStyle(fontSize: 8, color: AppColors.textSubtle, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          RichText(
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            text: TextSpan(
-              style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white),
-              children: [
-                TextSpan(text: "${widget.article.source}  ", style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.w900, fontSize: 11)),
-                TextSpan(text: snippet),
-                const TextSpan(text: "... "),
-                const TextSpan(text: "more", style: TextStyle(color: AppColors.textSubtle)),
-              ],
-            ),
-          ),
+          RichText(maxLines: 2, overflow: TextOverflow.ellipsis, text: TextSpan(style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white), children: [TextSpan(text: "${widget.article.source}  ", style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.w900, fontSize: 11)), TextSpan(text: snippet), const TextSpan(text: "... "), const TextSpan(text: "more", style: TextStyle(color: AppColors.textSubtle))])),
         ],
       ),
     );
@@ -262,7 +224,7 @@ class _ArticleTileState extends State<ArticleTile> {
 }
 
 Widget badge(String t, Color bg, Color tc) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      color: bg,
-      child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold)),
-    );
+  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
+  color: bg, 
+  child: Text(t, style: TextStyle(color: tc, fontSize: 9, fontWeight: FontWeight.bold))
+);

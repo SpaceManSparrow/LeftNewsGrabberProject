@@ -30,11 +30,13 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   List<Article> _allArticles = [];
   List<Article> _displayList = [];
-  int _visibleCount = 12;
+  List<Article> _incomingArticles = [];
+  int _visibleCount = 12; 
   int _tabIndex = 0;
   bool _isLoading = true;
   bool _extendedMode = false;
   bool _prettyMode = false;
+  bool _hasNewSignals = false;
   String _activeFilter = "ALL";
 
   int _totalSources = 0;
@@ -66,75 +68,106 @@ class _NewsDashboardState extends State<NewsDashboard> {
   Future<void> _bootSequence() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      setState(() {
-        _extendedMode = prefs.getBool('extended_coverage') ?? false;
-        _prettyMode = prefs.getBool('pretty_mode') ?? false;
-      });
-    } catch (e) {
-      debugPrint("Preference error: $e");
-    }
-    _fetchNews();
+      _extendedMode = prefs.getBool('extended_coverage') ?? false;
+      _prettyMode = prefs.getBool('pretty_mode') ?? false;
+
+      final String? cachedJson = prefs.getString('offline_cache');
+      if (cachedJson != null) {
+        final List decoded = jsonDecode(cachedJson);
+        setState(() {
+          _allArticles = decoded.map((m) => Article.fromMap(m)).toList();
+          _isLoading = false;
+          _applyLogic();
+        });
+      }
+    } catch (e) { debugPrint("Cache Error: $e"); }
+    _fetchNews(isBackground: _allArticles.isNotEmpty);
   }
 
-  Future<void> _fetchNews() async {
+  Future<void> _fetchNews({bool isBackground = false}) async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _completedSources = 0;
-      _allArticles = [];
-      _statusMessage = kIsWeb ? "Securing Bridge..." : "Connecting Direct...";
-    });
+    if (!isBackground) setState(() => _isLoading = true);
 
     final sources = Map.from(AppConfig.coreSources)..addAll(AppConfig.globalSources);
     if (_extendedMode) sources.addAll(AppConfig.extendedSources);
 
     _totalSources = sources.length;
-    List<Article> results = [];
-    Set<String> seenLinks = {};
+    _completedSources = 0;
+    List<Article> freshBatch = [];
+    // We create a set of current links to find genuinely new ones
+    Set<String> currentLinks = _allArticles.map((a) => a.link).toSet();
 
     for (var entry in sources.entries) {
       if (!mounted) break;
-      setState(() => _statusMessage = "Receiving: ${entry.value}");
+      if (!isBackground) setState(() => _statusMessage = "Receiving: ${entry.value}");
+
       try {
         String finalUrl = kIsWeb ? 'https://corsproxy.io/?${Uri.encodeComponent(entry.key)}' : entry.key;
-        final response = await http.get(Uri.parse(finalUrl)).timeout(const Duration(seconds: 12));
+        final response = await http.get(Uri.parse(finalUrl)).timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           String rawXml = utf8.decode(response.bodyBytes, allowMalformed: true);
           final parsed = FeedParser.parse(rawXml, entry.value);
 
-          // MASTER FEED AGGREGATION: Fast processing
           for (var article in parsed) {
-            if (seenLinks.contains(article.link) || article.link.isEmpty) continue;
-
-            // Global Source Filter (Title only)
-            if (AppConfig.globalSources.containsValue(entry.value)) {
-              final title = article.title.toLowerCase();
-              if (!AppConfig.auKeywords.any((k) => title.contains(k.toLowerCase()))) continue;
+            if (article.link.isEmpty) continue;
+            
+            // Check against current list AND what we've already found in this fetch
+            if (!currentLinks.contains(article.link)) {
+              freshBatch.add(article);
+              currentLinks.add(article.link); // Prevent duplicates within the same batch
             }
-
-            seenLinks.add(article.link);
-            results.add(article);
           }
         }
-      } catch (e) {
-        debugPrint("Link failure: $e");
-      } finally {
-        if (mounted) setState(() => _completedSources++);
-      }
-      await Future.delayed(const Duration(milliseconds: 50));
+      } catch (e) { debugPrint("Fetch Error: $e"); } 
+      finally { if (mounted) setState(() => _completedSources++); }
     }
-
-    // Sort by Newest to Oldest
-    results.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
 
     if (mounted) {
-      setState(() {
-        _allArticles = results;
-        _isLoading = false;
-        _applyLogic();
-      });
+      if (isBackground) {
+        // BACKGROUND MODE: Only show button if we have actual new articles
+        if (freshBatch.isNotEmpty) {
+          // Sort the incoming batch so the button reveals them in order
+          freshBatch.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+          setState(() {
+            _incomingArticles = freshBatch;
+            _hasNewSignals = true;
+          });
+        }
+      } else {
+        // INITIAL LOAD MODE: Sort and display immediately
+        freshBatch.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+        setState(() {
+          _allArticles = freshBatch;
+          _isLoading = false;
+          _applyLogic();
+        });
+        _saveToCache();
+      }
     }
+  }
+
+  Future<void> _saveToCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String encoded = jsonEncode(_allArticles.take(100).map((a) => a.toMap()).toList());
+      await prefs.setString('offline_cache', encoded);
+    } catch (_) {}
+  }
+
+  void _mergeNewSignals() {
+    setState(() {
+      // Prepend new articles to the master list
+      _allArticles = [..._incomingArticles, ..._allArticles];
+      // Final safety sort to ensure perfect chronological order
+      _allArticles.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+      
+      _incomingArticles = [];
+      _hasNewSignals = false;
+      _applyLogic();
+    });
+    _saveToCache();
+    _scrollController.animateTo(0, duration: const Duration(milliseconds: 800), curve: Curves.fastOutSlowIn);
   }
 
   void _applyLogic() {
@@ -161,12 +194,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
       key: _scaffoldKey,
       endDrawer: _buildSidebar(),
       bottomNavigationBar: _buildBottomNav(),
-      body: Column(
+      body: Stack(
         children: [
-          _fixedTopSection(width),
-          Expanded(
-            child: _tabIndex == 1 ? _videoPlaceholder() : (_isLoading ? _loader() : _refreshWrapper(width)),
+          Column(
+            children: [
+              _fixedTopSection(width),
+              Expanded(
+                child: _tabIndex == 1 ? _videoPlaceholder() : (_isLoading ? _loader() : _refreshWrapper(width)),
+              ),
+            ],
           ),
+          // Button only appears when background processing is 100% complete
+          if (_hasNewSignals && _tabIndex == 0) _newSignalPrompt(),
         ],
       ),
     );
@@ -174,10 +213,40 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   Widget _refreshWrapper(double width) {
     return RefreshIndicator(
-      onRefresh: _fetchNews,
+      onRefresh: () => _fetchNews(isBackground: false),
       color: widget.primaryColor,
       backgroundColor: AppColors.appSurface,
-      child: _allArticles.isEmpty ? _emptyState() : _mainScrollArea(width),
+      child: _displayList.isEmpty ? _emptyState() : _mainScrollArea(width),
+    );
+  }
+
+  Widget _newSignalPrompt() {
+    return Positioned(
+      top: 130, left: 0, right: 0,
+      child: Center(
+        child: GestureDetector(
+          onTap: _mergeNewSignals,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: widget.primaryColor,
+              borderRadius: BorderRadius.circular(99),
+              boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 20, spreadRadius: 5)],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(FontAwesomeIcons.bolt, size: 14, color: Colors.black),
+                const SizedBox(width: 12),
+                Text(
+                  "NEW SIGNALS DETECTED (${_incomingArticles.length})", 
+                  style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -188,14 +257,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
         children: [
           Icon(FontAwesomeIcons.videoSlash, size: 40, color: widget.primaryColor.withValues(alpha: 0.3)),
           const SizedBox(height: 20),
-          Text(
-            "VIDEO SIGNALS OFFLINE",
-            style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold, letterSpacing: 2),
-          ),
-          const Text(
-            "Future feature currently in development.",
-            style: TextStyle(color: AppColors.textMuted, fontSize: 10),
-          ),
+          Text("VIDEO SIGNALS OFFLINE", style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold, letterSpacing: 2)),
+          const Text("Future feature currently in development.", style: TextStyle(color: AppColors.textMuted, fontSize: 10)),
         ],
       ),
     );
@@ -225,33 +288,19 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return Column(
       children: [
         Container(
-          width: double.infinity,
-          color: widget.primaryColor,
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: const Text(
-            "THIS WEBSITE IS STILL IN BETA — DEVELOPMENT IN PROGRESS",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.appBackground, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2),
-          ),
+          width: double.infinity, color: widget.primaryColor, padding: const EdgeInsets.symmetric(vertical: 6),
+          child: const Text("THIS WEBSITE IS STILL IN BETA — DEVELOPMENT IN PROGRESS", textAlign: TextAlign.center, style: TextStyle(color: AppColors.appBackground, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
         ),
         Container(
-          width: double.infinity,
-          decoration: const BoxDecoration(color: AppColors.appBackground, border: Border(bottom: BorderSide(color: AppColors.borderSubtle))),
+          width: double.infinity, decoration: const BoxDecoration(color: AppColors.appBackground, border: Border(bottom: BorderSide(color: AppColors.borderSubtle))),
           child: Center(
             child: Container(
-              constraints: const BoxConstraints(maxWidth: 1800),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              constraints: const BoxConstraints(maxWidth: 1800), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               child: Row(
                 children: [
                   GestureDetector(
-                    onTap: () {
-                      setState(() => _activeFilter = "ALL");
-                      _applyLogic();
-                    },
-                    child: Text(
-                      width > 500 ? "THE RADICAL" : "TR",
-                      style: GoogleFonts.spaceGrotesk(color: widget.primaryColor, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: -1),
-                    ),
+                    onTap: () { setState(() => _activeFilter = "ALL"); _applyLogic(); },
+                    child: Text(width > 500 ? "THE RADICAL" : "TR", style: GoogleFonts.spaceGrotesk(color: widget.primaryColor, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: -1)),
                   ),
                   const SizedBox(width: 20),
                   Expanded(child: _searchBar()),
@@ -270,16 +319,12 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return Container(
       constraints: const BoxConstraints(maxWidth: 600),
       child: TextField(
-        controller: _searchController,
-        onChanged: _handleSearch,
+        controller: _searchController, onChanged: _handleSearch,
         style: const TextStyle(fontSize: 13, color: AppColors.textMain),
         decoration: InputDecoration(
-          hintText: "Search articles...",
-          hintStyle: const TextStyle(color: AppColors.textMuted),
+          hintText: "Search articles...", hintStyle: const TextStyle(color: AppColors.textMuted),
           prefixIcon: const Icon(FontAwesomeIcons.magnifyingGlass, size: 12, color: AppColors.textMuted),
-          filled: true,
-          fillColor: AppColors.highlightOverlay,
-          contentPadding: EdgeInsets.zero,
+          filled: true, fillColor: AppColors.highlightOverlay, contentPadding: EdgeInsets.zero,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(99), borderSide: BorderSide.none),
         ),
       ),
@@ -289,24 +334,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
   Widget _settingsButton(double width) {
     return ElevatedButton(
       onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.highlightOverlay,
-        foregroundColor: AppColors.textMain,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
-        side: const BorderSide(color: AppColors.borderSubtle),
-      ),
-      child: Row(
-        children: [
-          if (width > 700) ...[
-            const Text(
-              "SETTINGS",
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(width: 10)
-          ],
-          Icon(FontAwesomeIcons.sliders, size: 12, color: widget.primaryColor)
-        ],
-      ),
+      style: ElevatedButton.styleFrom(backgroundColor: AppColors.highlightOverlay, foregroundColor: AppColors.textMain, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)), side: const BorderSide(color: AppColors.borderSubtle)),
+      child: Row(children: [if (width > 700) ...[const Text("SETTINGS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)), const SizedBox(width: 10)], Icon(FontAwesomeIcons.sliders, size: 12, color: widget.primaryColor)]),
     );
   }
 
@@ -318,25 +347,24 @@ class _NewsDashboardState extends State<NewsDashboard> {
       children: [
         Center(
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 1754),
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+            constraints: const BoxConstraints(maxWidth: 1754), padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
             child: Column(
               children: [
                 _sectionHeader(width),
                 const SizedBox(height: 32),
                 Center(
                   child: Wrap(
-                    spacing: articleGap,
-                    runSpacing: articleGap,
-                    alignment: WrapAlignment.center,
-                    children: _displayList.take(_visibleCount).map((a) {
+                    spacing: articleGap, runSpacing: articleGap, alignment: WrapAlignment.center,
+                    children: _displayList.take(_visibleCount).map((a) { 
+                      // FIXED: ValueKey ensures State follows the correct article
                       if (width < 432) {
                         return FittedBox(
-                          fit: BoxFit.scaleDown,
+                          key: ValueKey(a.link), 
+                          fit: BoxFit.scaleDown, 
                           child: ArticleTile(article: a, primaryColor: widget.primaryColor),
                         );
                       }
-                      return ArticleTile(article: a, primaryColor: widget.primaryColor);
+                      return ArticleTile(key: ValueKey(a.link), article: a, primaryColor: widget.primaryColor);
                     }).toList(),
                   ),
                 ),
@@ -352,25 +380,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Expanded(
-            child: Text(
-              "RECENT NEWS",
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: width > 600 ? 60 : 32,
-                fontWeight: FontWeight.bold,
-                fontStyle: FontStyle.italic,
-                color: AppColors.textMain,
-              ),
-            ),
-          ),
-          if (width > 600)
-            Text(
-              "REFRESHED: ${DateFormat('HH:mm').format(DateTime.now())}",
-              style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
-            ),
+          Expanded(child: Text("RECENT NEWS", style: GoogleFonts.spaceGrotesk(fontSize: width > 600 ? 60 : 32, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic, color: AppColors.textMain))),
+          if (width > 600) Text("REFRESHED: ${DateFormat('HH:mm').format(DateTime.now())}", style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
         ],
       ),
     );
@@ -396,7 +409,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
           const SizedBox(height: 10),
           _topicList(),
           const SizedBox(height: 40),
-          _sourcesButton(),
+          _sourcesButton(), 
           const SizedBox(height: 12),
           _aboutButton(),
         ],
@@ -408,8 +421,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return SwitchListTile(
       title: const Text("PRETTY MODE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
       subtitle: const Text("Only show articles that have photos.", style: TextStyle(fontSize: 10)),
-      value: _prettyMode,
-      activeThumbColor: widget.primaryColor,
+      value: _prettyMode, activeThumbColor: widget.primaryColor,
       onChanged: (v) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('pretty_mode', v);
@@ -423,23 +435,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return SwitchListTile(
       title: const Text("EXTENDED COVERAGE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
       subtitle: const Text("Include broader independent sources.", style: TextStyle(fontSize: 10)),
-      value: _extendedMode,
-      activeThumbColor: widget.primaryColor,
+      value: _extendedMode, activeThumbColor: widget.primaryColor,
       onChanged: (v) async {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('extended_coverage', v);
         setState(() => _extendedMode = v);
-        _fetchNews();
+        _fetchNews(isBackground: false);
       },
     );
   }
 
   Widget _themePicker() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: AppColors.themeChoices.map((c) => GestureDetector(onTap: () => widget.onThemeChanged(c), child: Container(width: 35, height: 35, decoration: BoxDecoration(color: c, border: Border.all(color: widget.primaryColor == c ? Colors.white : Colors.transparent, width: 2))))).toList(),
-    );
+    return Wrap(spacing: 10, runSpacing: 10, children: AppColors.themeChoices.map((c) => GestureDetector(onTap: () => widget.onThemeChanged(c), child: Container(width: 35, height: 35, decoration: BoxDecoration(color: c, border: Border.all(color: widget.primaryColor == c ? Colors.white : Colors.transparent, width: 2))))).toList());
   }
 
   Widget _topicList() {
@@ -449,29 +456,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
         bool isActive = _activeFilter == name;
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: SizedBox(
-            width: double.infinity,
-            child: TextButton(
-              onPressed: () {
-                setState(() => _activeFilter = name);
-                _applyLogic();
-                Navigator.pop(context);
-              },
-              style: TextButton.styleFrom(
-                backgroundColor: isActive ? widget.primaryColor : Colors.transparent,
-                alignment: Alignment.centerLeft,
-                side: BorderSide(color: isActive ? widget.primaryColor : AppColors.borderSubtle),
-              ),
-              child: Text(
-                name,
-                style: TextStyle(
-                  color: isActive ? Colors.black : Colors.white60,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
+          child: SizedBox(width: double.infinity, child: TextButton(onPressed: () { setState(() => _activeFilter = name); _applyLogic(); Navigator.pop(context); }, style: TextButton.styleFrom(backgroundColor: isActive ? widget.primaryColor : Colors.transparent, alignment: Alignment.centerLeft, side: BorderSide(color: isActive ? widget.primaryColor : AppColors.borderSubtle)), child: Text(name, style: TextStyle(color: isActive ? Colors.black : Colors.white60, fontSize: 11, fontWeight: FontWeight.bold)))),
         );
       }).toList(),
     );
@@ -479,30 +464,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   Widget _sourcesButton() {
     return InkWell(
-      onTap: () {
-        Navigator.pop(context);
-        _showSourcesDialog();
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(border: Border.all(color: widget.primaryColor.withValues(alpha: 0.3)), color: AppColors.highlightOverlay),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Icon(FontAwesomeIcons.satelliteDish, size: 14, color: widget.primaryColor),
-                const SizedBox(width: 12),
-                const Text(
-                  "SIGNAL SOURCES",
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2),
-                )
-              ],
-            ),
-            Icon(FontAwesomeIcons.arrowRight, size: 10, color: widget.primaryColor)
-          ],
-        ),
-      ),
+      onTap: () { Navigator.pop(context); _showSourcesDialog(); },
+      child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(border: Border.all(color: widget.primaryColor.withValues(alpha: 0.3)), color: AppColors.highlightOverlay), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Row(children: [Icon(FontAwesomeIcons.satelliteDish, size: 14, color: widget.primaryColor), const SizedBox(width: 12), const Text("SIGNAL SOURCES", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2))]), Icon(FontAwesomeIcons.arrowRight, size: 10, color: widget.primaryColor)])),
     );
   }
 
@@ -511,49 +474,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
     if (_extendedMode) allSources.addAll(AppConfig.extendedSources);
     final sortedNames = allSources.values.toList()..sort();
     showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: AppColors.appSurface,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      context: context, builder: (context) => Dialog(
+        backgroundColor: AppColors.appSurface, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(border: Border.all(color: AppColors.borderSubtle)),
+          constraints: const BoxConstraints(maxWidth: 600), padding: const EdgeInsets.all(32), decoration: BoxDecoration(border: Border.all(color: AppColors.borderSubtle)),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text("ACTIVE SIGNALS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 4)),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(FontAwesomeIcons.xmark, size: 18))
-              ]),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("ACTIVE SIGNALS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 4)), IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(FontAwesomeIcons.xmark, size: 18))]),
               const SizedBox(height: 20),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: sortedNames.length,
-                  itemBuilder: (context, index) => Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white10))),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(sortedNames[index], style: const TextStyle(fontSize: 11, color: AppColors.textMain, fontWeight: FontWeight.w500)),
-                        Container(width: 6, height: 6, decoration: BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.5), blurRadius: 4, spreadRadius: 1)]))
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              Flexible(child: ListView.builder(shrinkWrap: true, itemCount: sortedNames.length, itemBuilder: (context, index) => Container(padding: const EdgeInsets.symmetric(vertical: 12), decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white10))), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(sortedNames[index], style: const TextStyle(fontSize: 11, color: AppColors.textMain, fontWeight: FontWeight.w500)), Container(width: 6, height: 6, decoration: BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.greenAccent.withValues(alpha: 0.5), blurRadius: 4, spreadRadius: 1)]))])))),
               const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(backgroundColor: widget.primaryColor, foregroundColor: Colors.black, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 20)),
-                  child: const Text("CLOSE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3)),
-                ),
-              ),
+              SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => Navigator.pop(context), style: ElevatedButton.styleFrom(backgroundColor: widget.primaryColor, foregroundColor: Colors.black, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 20)), child: const Text("CLOSE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3)))),
             ],
           ),
         ),
@@ -563,36 +495,28 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   Widget _aboutButton() {
     return InkWell(
-      onTap: () {
-        Navigator.pop(context);
-        _showAboutDialog();
-      },
+      onTap: () { Navigator.pop(context); _showAboutDialog(); },
       child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(border: Border.all(color: widget.primaryColor)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Row(children: [Icon(FontAwesomeIcons.circleInfo, size: 14, color: widget.primaryColor), const SizedBox(width: 12), const Text("ABOUT PROJECT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2))]), Icon(FontAwesomeIcons.arrowRight, size: 10, color: widget.primaryColor)])),
     );
   }
 
   void _showAboutDialog() {
     showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: AppColors.appSurface,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      context: context, builder: (context) => Dialog(
+        backgroundColor: AppColors.appSurface, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(border: Border.all(color: AppColors.borderSubtle)),
+          constraints: const BoxConstraints(maxWidth: 600), padding: const EdgeInsets.all(32), decoration: BoxDecoration(border: Border.all(color: AppColors.borderSubtle)),
           child: SingleChildScrollView(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [Icon(FontAwesomeIcons.circleInfo, size: 16, color: widget.primaryColor), const SizedBox(width: 10), const Text("PROJECT BRIEFING", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 4))]),
                     const SizedBox(height: 10),
                     Text("THE RADICAL", style: GoogleFonts.spaceGrotesk(fontSize: 40, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
-                    const Text("v0.1.3", style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                  ]),
+                    const Text("v0.1.5", style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                  ]), 
                   IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(FontAwesomeIcons.xmark, size: 18))
                 ]),
                 const SizedBox(height: 30),
