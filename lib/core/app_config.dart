@@ -41,8 +41,22 @@ class AppConfig {
     "DISPUTES REPORT",
     "https://overland.org.au/latest/feed":
     "OVERLAND",
-    "https://au.spiritofeureka.org/category/fp-roktabs-showcase/feed/":
-    "SPIRIT OF EUREKA"
+    "https://au.spiritofeureka.org/category/fp-roktabs-showcase/feed":
+    "SPIRIT OF EUREKA",
+    "https://www.blackpeoplesunion.org/articles/rss.xml":
+    "BLACK PEOPLES UNION",
+    "https://www.blackpeoplesunion.org/statements/rss.xml":
+    "BLACK PEOPLES UNION",
+    "https://indigenousx.com.au/stories/feed":
+    "INDIGENOUSX",
+    "https://www.redblacknotes.com/feed/rss":
+    "RED AND BLACK NOTES",
+    "https://cpa.org.au/feed/?post_type=guardian":
+    "THE GUARDIAN (CPA)",
+    "https://arena.org.au/feed":
+    "ARENA",
+    "https://communist.org.au/feed":
+    "THE COMMUNIST"
   };
 
   // Global sources that are filtered for Australian keywords
@@ -50,7 +64,9 @@ class AppConfig {
     "https://jacobin.com/feed":
     "JACOBIN",
     "https://themilitant.com/feed":
-    "THE MILITANT"
+    "THE MILITANT",
+    "https://www.counterpunch.org/feed":
+    "COUNTER PUNCH"
   };
 
   // Optional sources enabled via "Extended Coverage" toggle
@@ -62,7 +78,7 @@ class AppConfig {
     "https://theconversation.com/topics/australia-64/articles.atom":
     "THE CONVERSATION",
     "https://www.theguardian.com/australia-news/australian-trade-unions/rss":
-    "THE GUARDIAN",
+    "THE GUARDIAN (GNM)",
     /* "https://www.democracynow.org/democracynow.rss":     // Need to add auKeywords to this somhow.
     "DEMOCRACY NOW" */
   };
