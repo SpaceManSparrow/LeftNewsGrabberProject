@@ -6895,7 +6895,7 @@ for(s=a.length,r=0;r<s;++r){q=a[r]
 if(B.c.p(q,"/")){s=A.bw("Illegal path character "+q)
 throw A.i(s)}}},
 aQc(a){var s
-if(a.length===0)return B.uL
+if(a.length===0)return B.uM
 s=A.aDc(a)
 s.Zp(A.aEd())
 return A.aul(s,t.N,t.yp)},
@@ -26696,7 +26696,7 @@ _.Q=j
 _.as=k
 _.a=l},
 a0e:function a0e(a){this.a=a},
-aJs(a,b,c){var s,r,q=t.z,p=A.av6(B.uS,q,q)
+aJs(a,b,c){var s,r,q=t.z,p=A.av6(B.uL,q,q)
 p.R(0,B.kI)
 if(c)p.R(0,B.uT)
 s=A.k(p).i("b2<2>")
@@ -26850,7 +26850,7 @@ e=n==null?a0:n.b[1]
 if(e==null)e=""}if(e.length===0){n=A.aY('(https?://[^\\s"<>]+?\\.(?:jpg|jpeg|png|webp))',!1,!1,!1).dj(o)
 e=n==null?a0:n.b[1]
 if(e==null)e=""}d=A.c([],r)
-B.uR.ao(0,new A.a32(m,f,d))
+B.uS.ao(0,new A.a32(m,f,d))
 n=B.c.iF(l)
 c=A.auC(f)
 b=A.azm(e)
@@ -27785,7 +27785,7 @@ case 3:return B.Nt
 case 4:return B.yO}},
 atm(a){var s=0,r=A.L(t.y),q
 var $async$atm=A.M(function(b,c){if(b===1)return A.I(c,r)
-for(;;)switch(s){case 0:q=$.aGr().v7(a.k(0),new A.KV(A.aSO(B.GR),new A.KF(!0,!0,B.uP),null))
+for(;;)switch(s){case 0:q=$.aGr().v7(a.k(0),new A.KV(A.aSO(B.GR),new A.KF(!0,!0,B.uQ),null))
 s=1
 break
 case 1:return A.J(q,r)}})
@@ -30321,9 +30321,9 @@ $0(){var s,r,q,p,o,n,m=this,l=m.b,k=B.L8.h(0,l)
 if(k!=null)return k
 s=m.c
 r=s.a
-if(B.uQ.aw(r.key)){l=r.key
+if(B.uR.aw(r.key)){l=r.key
 l.toString
-l=B.uQ.h(0,l)
+l=B.uR.h(0,l)
 q=l==null?null:l[J.a6(r.location)]
 q.toString
 return q}if(m.d){p=m.a.c.ZY(r.code,r.key,J.a6(r.keyCode))
@@ -38577,14 +38577,14 @@ for(o=0;o<q;++o)p.push(r.h(s,o))
 p.$flags=3
 return p},
 garI(){var s,r,q,p,o,n,m,l,k=this
-if(k.c!==0)return B.uN
+if(k.c!==0)return B.uO
 s=k.e
 r=J.bt(s)
 q=r.gF(s)
 p=k.d
 o=J.bt(p)
 n=o.gF(p)-q-k.f
-if(q===0)return B.uN
+if(q===0)return B.uO
 m=new A.eR(t.Hf)
 for(l=0;l<q;++l)m.m(0,new A.eD(r.h(s,l)),o.h(p,n+l))
 return new A.op(m,t.qO)}}
@@ -42298,7 +42298,7 @@ s=A.c([],t.s)
 for(r=q;r<p;++r)if(o.charCodeAt(r)===47){s.push(B.c.U(o,q,r))
 q=r+1}s.push(B.c.U(o,q,p))
 return A.a6r(s,t.N)},
-goG(){if(this.f>=this.r)return B.uL
+goG(){if(this.f>=this.r)return B.uM
 var s=A.aDc(this.gqT())
 s.Zp(A.aEd())
 return A.aul(s,t.N,t.yp)},
@@ -75805,9 +75805,9 @@ p===$&&A.a()
 q=p.gK()}if(r||q==null)return
 if(!(s.c.gW() instanceof A.A))return
 o=$.a3.af$.x.h(0,a.ry)
-n=o!=null?A.azF(o,a0,s):B.uM
+n=o!=null?A.azF(o,a0,s):B.uN
 m=$.a3.af$.x.h(0,b.ry)
-l=m!=null?A.azF(m,a0,s):B.uM
+l=m!=null?A.azF(m,a0,s):B.uN
 for(s=n.giq(),s=s.ga7(s),r=this.b,p=t.F,k=t.T,j=t.Y,i=t.v,h=j.i("an<am.T>"),g=t.k2;s.v();){f=s.gM().a
 l.h(0,f)
 e=r.h(0,f)
@@ -81313,7 +81313,7 @@ $2(a,b){if(!a.a)a.J(b)},
 $S:44}
 A.B4.prototype={
 an(){var s=null,r=t.A
-return new A.q5(new A.UN($.aw()),new A.bs(s,r),new A.bs(s,t.LZ),new A.bs(s,r),B.uO,s,A.q(t.yb,t.M),s,!0,s,s,s)},
+return new A.q5(new A.UN($.aw()),new A.bs(s,r),new A.bs(s,t.LZ),new A.bs(s,r),B.uP,s,A.q(t.yb,t.M),s,!0,s,s,s)},
 auM(a,b){return this.f.$2(a,b)}}
 A.adu.prototype={
 $1(a){return null},
@@ -81458,7 +81458,7 @@ a_x(a){var s,r,q=this
 if(a===q.ay)s=!a||A.aU(q.a.c)===q.ch
 else s=!1
 if(s)return
-if(!a){q.at=B.uO
+if(!a){q.at=B.uP
 q.RL()}else{switch(A.aU(q.a.c).a){case 1:q.at=A.as([B.Ao,new A.c9(new A.adq(q),new A.adr(q),t.ok)],t.u,t.xR)
 break
 case 0:q.at=A.as([B.lM,new A.c9(new A.ads(q),new A.adt(q),t.Uv)],t.u,t.xR)
@@ -88460,7 +88460,7 @@ aiB(){var s=t._o
 s=A.X(new A.a1(B.IE,new A.a0n(this),s),s.i("ae.E"))
 return A.aC7(B.dZ,s,10,10)},
 aiO(){var s,r=A.c(["ALL"],t.s)
-B.b.R(r,B.uR.gbO())
+B.b.R(r,B.uS.gbO())
 s=t.Jm
 r=A.X(new A.a1(r,new A.a0p(this),s),s.i("ae.E"))
 return A.fb(r,B.X,B.a0,B.Y)}}
@@ -88542,7 +88542,7 @@ s=p}for(;;)switch(s){case 0:if(m.c==null){s=1
 break}c=!a5
 if(c)m.ae(new A.and(m))
 b=t.z
-a=A.av6(B.uS,b,b)
+a=A.av6(B.uL,b,b)
 a.R(0,B.kI)
 if(m.as)a.R(0,B.uT)
 m.ch=a.a
@@ -92899,7 +92899,7 @@ B.dW=new A.P7(0,0,0,0)
 B.IP=s([],A.ao("z<a17>"))
 B.Yf=new A.ahu()
 B.be={}
-B.uP=new A.bx(B.be,[],t.li)
+B.uQ=new A.bx(B.be,[],t.li)
 B.Yg=new A.ahI()
 B.fw=new A.Pr()
 B.cG=new A.Ps()
@@ -93445,7 +93445,7 @@ B.on=new A.mo(1,"gif")
 B.Gq=new A.jr(B.on,!1,1,"gif")
 B.op=new A.jr(B.oo,!1,4,"webp")
 B.hh=new A.jr(B.on,!0,2,"animatedGif")
-B.Gs=new A.KF(!0,!0,B.uP)
+B.Gs=new A.KF(!0,!0,B.uQ)
 B.aB=s([],t.oU)
 B.Gt=new A.kM("\ufffc",null,null,null,!0,!0,B.aB)
 B.Gu=new A.yS(null,null,null,null,null,null,null,null,null,B.o3,B.mu,!1,null,!1,null,null,null,null,null,null,null,null,!1,null,null,null,null,null,null,null,null,null,null,null,!1,null,null)
@@ -93794,8 +93794,8 @@ B.i1=new A.a7(B.oX,!1,!1,!1,!1,B.m)
 B.ho=new A.e(4294967309)
 B.i4=new A.a7(B.ho,!1,!1,!1,!1,B.m)
 B.uJ=new A.dk([B.lj,B.n,B.lg,B.n,B.lh,B.n,B.li,B.n,B.zs,B.n,B.zp,B.n,B.zq,B.n,B.zr,B.n,B.i8,B.n,B.i5,B.n,B.i6,B.n,B.i7,B.n,B.zt,B.n,B.zu,B.n,B.zx,B.n,B.zy,B.n,B.i1,B.n,B.i4,B.n],t.Fp)
-B.LI={"https://jacobin.com/feed":0,"https://themilitant.com/feed":1}
-B.kI=new A.bx(B.LI,["JACOBIN","THE MILITANT"],t.li)
+B.LH={"https://jacobin.com/feed":0,"https://themilitant.com/feed":1}
+B.kI=new A.bx(B.LH,["JACOBIN","THE MILITANT"],t.li)
 B.JQ=new A.e(33)
 B.JR=new A.e(34)
 B.JS=new A.e(35)
@@ -94251,21 +94251,23 @@ B.Pw=new A.a7(B.aO,!1,!1,!0,!1,B.m)
 B.PT=new A.a7(B.aP,!1,!0,!0,!1,B.m)
 B.PJ=new A.a7(B.aP,!1,!1,!0,!1,B.m)
 B.uK=new A.dk([B.PO,B.n,B.Pk,B.n,B.zn,B.n,B.zk,B.n,B.PF,B.n,B.Pw,B.n,B.PT,B.n,B.PJ,B.n],t.Fp)
-B.LH={d:0,E:1,EEEE:2,LLL:3,LLLL:4,M:5,Md:6,MEd:7,MMM:8,MMMd:9,MMMEd:10,MMMM:11,MMMMd:12,MMMMEEEEd:13,QQQ:14,QQQQ:15,y:16,yM:17,yMd:18,yMEd:19,yMMM:20,yMMMd:21,yMMMEd:22,yMMMM:23,yMMMMd:24,yMMMMEEEEd:25,yQQQ:26,yQQQQ:27,H:28,Hm:29,Hms:30,j:31,jm:32,jms:33,jmv:34,jmz:35,jz:36,m:37,ms:38,s:39,v:40,z:41,zzzz:42,ZZZZ:43}
-B.La=new A.bx(B.LH,["d","ccc","cccc","LLL","LLLL","L","M/d","EEE, M/d","LLL","MMM d","EEE, MMM d","LLLL","MMMM d","EEEE, MMMM d","QQQ","QQQQ","y","M/y","M/d/y","EEE, M/d/y","MMM y","MMM d, y","EEE, MMM d, y","MMMM y","MMMM d, y","EEEE, MMMM d, y","QQQ y","QQQQ y","HH","HH:mm","HH:mm:ss","h\u202fa","h:mm\u202fa","h:mm:ss\u202fa","h:mm\u202fa v","h:mm\u202fa z","h\u202fa z","m","mm:ss","s","v","z","zzzz","ZZZZ"],t.li)
+B.LJ={"https://ancomfed.org/picket-line/feed":0,"https://www.greenleft.org.au/rss.xml":1,"https://redflag.org.au/rss/":2,"https://red-spark.org/tag/australia/feed":3,"https://socialismtoday.au/feed":4,"https://solidarity.net.au/feed":5,"https://labortribune.net.au/feed":6,"https://www.wsws.org/en/topics/country/australia/rss.xml":7,"https://melbacg.au/category/anvil/rss":8,"https://vanguard-cpaml.blogspot.com/rss.xml":9,"https://partisanmagazine.org/feed/":10,"https://redantcollective.org/feed":11,"https://temokalati.wordpress.com/feed":12,"https://www.thenews.coop/country/oceania/feed":13,"https://seqldiww.org/category/australia/feed":14,"https://freedomnews.org.uk/tag/australia/feed":15,"https://disputesreport.substack.com/feed":16,"https://overland.org.au/latest/feed":17,"https://au.spiritofeureka.org/category/fp-roktabs-showcase/feed/":18}
+B.uL=new A.bx(B.LJ,["PICKET LINE","GREEN LEFT","RED FLAG","RED SPARK","SOCIALISM TODAY","SOLIDARITY","LABOR TRIBUNE","WORLD SOCIALIST WEB SITE","THE ANVIL","VANGUARD","PARTISAN!","RED ANT","TEMOKALATI","CO-OP NEWS","IWW (SOUTH EAST QUEENSLAND)","FREEDOM","DISPUTES REPORT","OVERLAND","SPIRIT OF EUREKA"],t.li)
+B.LG={d:0,E:1,EEEE:2,LLL:3,LLLL:4,M:5,Md:6,MEd:7,MMM:8,MMMd:9,MMMEd:10,MMMM:11,MMMMd:12,MMMMEEEEd:13,QQQ:14,QQQQ:15,y:16,yM:17,yMd:18,yMEd:19,yMMM:20,yMMMd:21,yMMMEd:22,yMMMM:23,yMMMMd:24,yMMMMEEEEd:25,yQQQ:26,yQQQQ:27,H:28,Hm:29,Hms:30,j:31,jm:32,jms:33,jmv:34,jmz:35,jz:36,m:37,ms:38,s:39,v:40,z:41,zzzz:42,ZZZZ:43}
+B.La=new A.bx(B.LG,["d","ccc","cccc","LLL","LLLL","L","M/d","EEE, M/d","LLL","MMM d","EEE, MMM d","LLLL","MMMM d","EEEE, MMMM d","QQQ","QQQQ","y","M/y","M/d/y","EEE, M/d/y","MMM y","MMM d, y","EEE, MMM d, y","MMMM y","MMMM d, y","EEEE, MMMM d, y","QQQ y","QQQQ y","HH","HH:mm","HH:mm:ss","h\u202fa","h:mm\u202fa","h:mm:ss\u202fa","h:mm\u202fa v","h:mm\u202fa z","h\u202fa z","m","mm:ss","s","v","z","zzzz","ZZZZ"],t.li)
 B.LU={"iso_8859-1:1987":0,"iso-ir-100":1,"iso_8859-1":2,"iso-8859-1":3,latin1:4,l1:5,ibm819:6,cp819:7,csisolatin1:8,"iso-ir-6":9,"ansi_x3.4-1968":10,"ansi_x3.4-1986":11,"iso_646.irv:1991":12,"iso646-us":13,"us-ascii":14,us:15,ibm367:16,cp367:17,csascii:18,ascii:19,csutf8:20,"utf-8":21}
 B.bt=new A.HP()
 B.Lb=new A.bx(B.LU,[B.bu,B.bu,B.bu,B.bu,B.bu,B.bu,B.bu,B.bu,B.bu,B.bt,B.bt,B.bt,B.bt,B.bt,B.bt,B.bt,B.bt,B.bt,B.bt,B.bt,B.U,B.U],A.ao("bx<w,oz>"))
 B.LW={type:0}
 B.Lc=new A.bx(B.LW,["line"],t.li)
-B.uM=new A.bx(B.be,[],A.ao("bx<O,aCu>"))
+B.uN=new A.bx(B.be,[],A.ao("bx<O,aCu>"))
 B.hx=new A.bx(B.be,[],A.ao("bx<un,aP>"))
 B.Ld=new A.bx(B.be,[],A.ao("bx<w,f(U)>"))
-B.uL=new A.bx(B.be,[],t.VJ)
+B.uM=new A.bx(B.be,[],t.VJ)
 B.kJ=new A.bx(B.be,[],A.ao("bx<w,@>"))
-B.uN=new A.bx(B.be,[],A.ao("bx<BN,@>"))
+B.uO=new A.bx(B.be,[],A.ao("bx<BN,@>"))
 B.Le=new A.bx(B.be,[],A.ao("bx<fr,cu>"))
-B.uO=new A.bx(B.be,[],A.ao("bx<fr,oQ<cu>>"))
+B.uP=new A.bx(B.be,[],A.ao("bx<fr,oQ<cu>>"))
 B.Hj=s([42,null,null,8589935146],t.Z)
 B.Hk=s([43,null,null,8589935147],t.Z)
 B.Hl=s([45,null,null,8589935149],t.Z)
@@ -94298,7 +94300,7 @@ B.Im=s([8589934854,8589934854,8589934855,null],t.Z)
 B.Hf=s([4294968071,null,null,8589935155],t.Z)
 B.Hg=s([4294968072,null,null,8589935161],t.Z)
 B.In=s([8589934850,8589934850,8589934851,null],t.Z)
-B.uQ=new A.dk(["*",B.Hj,"+",B.Hk,"-",B.Hl,".",B.Hm,"/",B.Hn,"0",B.Ho,"1",B.Hp,"2",B.Hs,"3",B.Hu,"4",B.Hv,"5",B.Hw,"6",B.Hx,"7",B.Hy,"8",B.Hz,"9",B.HB,"Alt",B.Ik,"AltGraph",B.H8,"ArrowDown",B.H9,"ArrowLeft",B.Ha,"ArrowRight",B.Hb,"ArrowUp",B.Hc,"Clear",B.Hh,"Control",B.Il,"Delete",B.H7,"End",B.Hd,"Enter",B.H6,"Home",B.He,"Insert",B.Hi,"Meta",B.Im,"PageDown",B.Hf,"PageUp",B.Hg,"Shift",B.In],A.ao("dk<w,S<l?>>"))
+B.uR=new A.dk(["*",B.Hj,"+",B.Hk,"-",B.Hl,".",B.Hm,"/",B.Hn,"0",B.Ho,"1",B.Hp,"2",B.Hs,"3",B.Hu,"4",B.Hv,"5",B.Hw,"6",B.Hx,"7",B.Hy,"8",B.Hz,"9",B.HB,"Alt",B.Ik,"AltGraph",B.H8,"ArrowDown",B.H9,"ArrowLeft",B.Ha,"ArrowRight",B.Hb,"ArrowUp",B.Hc,"Clear",B.Hh,"Control",B.Il,"Delete",B.H7,"End",B.Hd,"Enter",B.H6,"Home",B.He,"Insert",B.Hi,"Meta",B.Im,"PageDown",B.Hf,"PageUp",B.Hg,"Shift",B.In],A.ao("dk<w,S<l?>>"))
 B.HA=s([B.oY,null,null,B.uE],t.L)
 B.IW=s([B.uq,null,null,B.uF],t.L)
 B.I0=s([B.ur,null,null,B.uG],t.L)
@@ -94342,9 +94344,7 @@ B.Jt=s(["mutual aid","solidarity","community","co-op","cooperative"],t.s)
 B.Ic=s(["parliament","government","senate","election","albanese","dutton"],t.s)
 B.Js=s(["praxis","protest","activism","organizing","demonstration"],t.s)
 B.Is=s(["technology","AI","artificial intelligence","surveillance","privacy"],t.s)
-B.uR=new A.bx(B.LT,[B.Jq,B.H5,B.IY,B.Jj,B.IX,B.Jt,B.Ic,B.Js,B.Is],t.VJ)
-B.LE={"https://ancomfed.org/picket-line/feed":0,"https://www.greenleft.org.au/rss.xml":1,"https://redflag.org.au/rss/":2,"https://red-spark.org/tag/australia/feed":3,"https://socialismtoday.au/feed":4,"https://solidarity.net.au/feed":5,"https://labortribune.net.au/feed":6,"https://www.wsws.org/en/topics/country/australia/rss.xml":7,"https://melbacg.au/category/anvil/rss":8,"https://vanguard-cpaml.blogspot.com/rss.xml":9,"https://partisanmagazine.org/feed/":10,"https://redantcollective.org/feed":11,"https://temokalati.wordpress.com/feed":12,"https://www.thenews.coop/country/oceania/feed":13,"https://seqldiww.org/category/australia/feed":14,"https://freedomnews.org.uk/tag/australia/feed":15,"https://disputesreport.substack.com/feed":16}
-B.uS=new A.bx(B.LE,["PICKET LINE","GREEN LEFT","RED FLAG","RED SPARK","SOCIALISM TODAY","SOLIDARITY","LABOR TRIBUNE","WORLD SOCIALIST WEB SITE","THE ANVIL","VANGUARD","PARTISAN!","RED ANT","TEMOKALATI","CO-OP NEWS","IWW (SOUTH EAST QUEENSLAND)","FREEDOM","DISPUTES REPORT"],t.li)
+B.uS=new A.bx(B.LT,[B.Jq,B.H5,B.IY,B.Jj,B.IX,B.Jt,B.Ic,B.Js,B.Is],t.VJ)
 B.LP={"https://michaelwest.com.au/category/latest-posts/feed/":0,"http://feeds.feedburner.com/IndependentAustralia":1,"https://theconversation.com/topics/australia-64/articles.atom":2,"https://www.theguardian.com/australia-news/australian-trade-unions/rss":3}
 B.uT=new A.bx(B.LP,["MICHAEL WEST","INDEPENDENT AUSTRALIA","THE CONVERSATION","THE GUARDIAN"],t.li)
 B.LO={KeyA:0,KeyB:1,KeyC:2,KeyD:3,KeyE:4,KeyF:5,KeyG:6,KeyH:7,KeyI:8,KeyJ:9,KeyK:10,KeyL:11,KeyM:12,KeyN:13,KeyO:14,KeyP:15,KeyQ:16,KeyR:17,KeyS:18,KeyT:19,KeyU:20,KeyV:21,KeyW:22,KeyX:23,KeyY:24,KeyZ:25,Digit1:26,Digit2:27,Digit3:28,Digit4:29,Digit5:30,Digit6:31,Digit7:32,Digit8:33,Digit9:34,Digit0:35,Minus:36,Equal:37,BracketLeft:38,BracketRight:39,Backslash:40,Semicolon:41,Quote:42,Backquote:43,Comma:44,Period:45,Slash:46}
@@ -94917,10 +94917,10 @@ B.LN={mailto:0,tel:1,sms:2}
 B.OR=new A.dU(B.LN,3,t.fF)
 B.lf=new A.eb([B.bP,B.hC,B.kR],A.ao("eb<kY>"))
 B.OS=new A.eb([10,11,12,13,133,8232,8233],t.Ih)
-B.LG={serif:0,"sans-serif":1,monospace:2,cursive:3,fantasy:4,"system-ui":5,math:6,emoji:7,fangsong:8}
-B.OT=new A.dU(B.LG,9,t.fF)
-B.LF={"canvaskit.js":0}
-B.OU=new A.dU(B.LF,1,t.fF)
+B.LF={serif:0,"sans-serif":1,monospace:2,cursive:3,fantasy:4,"system-ui":5,math:6,emoji:7,fangsong:8}
+B.OT=new A.dU(B.LF,9,t.fF)
+B.LE={"canvaskit.js":0}
+B.OU=new A.dU(B.LE,1,t.fF)
 B.zh=new A.eb([B.bQ,B.aQ,B.ak,B.bf,B.aX],t.Lu)
 B.LR={javascript:0}
 B.OV=new A.dU(B.LR,1,t.fF)
@@ -94936,8 +94936,8 @@ B.w=new A.bR(1,"focused")
 B.v=new A.bR(0,"hovered")
 B.K=new A.bR(2,"pressed")
 B.P1=new A.eb([B.w,B.v,B.K],A.ao("eb<bR>"))
-B.LJ={click:0,touchstart:1,touchend:2,pointerdown:3,pointermove:4,pointerup:5}
-B.P2=new A.dU(B.LJ,6,t.fF)
+B.LI={click:0,touchstart:1,touchend:2,pointerdown:3,pointermove:4,pointerup:5}
+B.P2=new A.dU(B.LI,6,t.fF)
 B.OM=new A.hY(8,"row")
 B.OI=new A.hY(1,"tab")
 B.P3=new A.eb([B.OM,B.OI],A.ao("eb<hY>"))

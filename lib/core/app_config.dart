@@ -38,7 +38,11 @@ class AppConfig {
     "https://freedomnews.org.uk/tag/australia/feed":
     "FREEDOM",
     "https://disputesreport.substack.com/feed":
-    "DISPUTES REPORT"
+    "DISPUTES REPORT",
+    "https://overland.org.au/latest/feed":
+    "OVERLAND",
+    "https://au.spiritofeureka.org/category/fp-roktabs-showcase/feed/":
+    "SPIRIT OF EUREKA"
   };
 
   // Global sources that are filtered for Australian keywords
@@ -58,7 +62,9 @@ class AppConfig {
     "https://theconversation.com/topics/australia-64/articles.atom":
     "THE CONVERSATION",
     "https://www.theguardian.com/australia-news/australian-trade-unions/rss":
-    "THE GUARDIAN"
+    "THE GUARDIAN",
+    /* "https://www.democracynow.org/democracynow.rss":     // Need to add auKeywords to this somhow.
+    "DEMOCRACY NOW" */
   };
 
   // Keywords used to filter global sources for relevance to Australia
