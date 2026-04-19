@@ -39,10 +39,12 @@ class StoryBar extends StatelessWidget {
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 1754),
-          height: 120,
+          // FIX: Increased height from 120 to 135 to prevent RenderFlex overflow
+          height: 135, 
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+            // FIX: Slightly tighter vertical padding
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             itemCount: storyMap.length,
             itemBuilder: (context, index) {
               String source = storyMap.keys.elementAt(index);
@@ -64,6 +66,7 @@ class StoryBar extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(right: 20),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min, // Ensure column only takes needed space
                     children: [
                       Container(
                         padding: const EdgeInsets.all(3),
@@ -86,12 +89,19 @@ class StoryBar extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        source,
-                        style: const TextStyle(
-                          fontSize: 9, 
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textMuted
+                      // Container wrapper for text to ensure it doesn't try to expand
+                      SizedBox(
+                        width: 80,
+                        child: Text(
+                          source,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 9, 
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textMuted
+                          ),
                         ),
                       ),
                     ],

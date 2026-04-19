@@ -52,7 +52,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
   int _tabIndex = 0;
   bool _isLoading = true;
   bool _extendedMode = false;
-  bool _prettyMode = false;
   bool _hasNewSignals = false;
   String _activeFilter = "ALL";
 
@@ -107,7 +106,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
     try {
       final prefs = await SharedPreferences.getInstance();
       _extendedMode = prefs.getBool('extended_coverage') ?? false;
-      _prettyMode = prefs.getBool('pretty_mode') ?? false;
 
       // Load Source Filtering Preferences
       _allSourcesEnabled = prefs.getBool('all_sources_enabled') ?? true;
@@ -294,9 +292,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
       if (_activeFilter != "ALL") {
         filtered = filtered.where((a) => a.topics.contains(_activeFilter));
       }
-      if (_prettyMode) {
-        filtered = filtered.where((a) => a.thumbnail.isNotEmpty);
-      }
+      // PRETTY MODE LOGIC REMOVED
       _displayList = filtered.toList();
       _visibleCount = 12;
     });
@@ -322,13 +318,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
       endDrawer: DashboardDrawer(
         primaryColor: widget.primaryColor,
         onThemeChanged: widget.onThemeChanged,
-        prettyMode: _prettyMode,
-        onPrettyModeChanged: (v) async {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('pretty_mode', v);
-          setState(() => _prettyMode = v);
-          _applyLogic();
-        },
         extendedMode: _extendedMode,
         onExtendedModeChanged: (v) async {
           final prefs = await SharedPreferences.getInstance();
@@ -394,7 +383,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                   width: width,
                   primaryColor: widget.primaryColor,
                   displayList: _displayList,
-                  allArticles: _allArticles, // <-- PASSED FULL ARTICLE LIST
+                  allArticles: _allArticles, 
                   visibleCount: _visibleCount,
                   scrollController: _scrollController,
                   totalSources: _totalSources,

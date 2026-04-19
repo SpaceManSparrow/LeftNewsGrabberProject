@@ -10,8 +10,6 @@ import '../core/app_config.dart';
 class DashboardDrawer extends StatelessWidget {
   final Color primaryColor;
   final Function(Color) onThemeChanged;
-  final bool prettyMode;
-  final Function(bool) onPrettyModeChanged;
   final bool extendedMode;
   final Function(bool) onExtendedModeChanged;
   final String activeFilter;
@@ -23,8 +21,6 @@ class DashboardDrawer extends StatelessWidget {
     super.key,
     required this.primaryColor,
     required this.onThemeChanged,
-    required this.prettyMode,
-    required this.onPrettyModeChanged,
     required this.extendedMode,
     required this.onExtendedModeChanged,
     required this.activeFilter,
@@ -53,9 +49,8 @@ class DashboardDrawer extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 30),
-          // Coverage and Mode Toggles
+          // Coverage Toggle
           _coverageToggle(),
-          _prettyModeToggle(),
           const SizedBox(height: 40),
           // Theme Selection
           const Text(
@@ -87,22 +82,6 @@ class DashboardDrawer extends StatelessWidget {
           _aboutButton(),
         ],
       ),
-    );
-  }
-
-  Widget _prettyModeToggle() {
-    return SwitchListTile(
-      title: const Text(
-        "PRETTY MODE",
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-      ),
-      subtitle: const Text(
-        "Only show articles that have photos.",
-        style: TextStyle(fontSize: 10),
-      ),
-      value: prettyMode,
-      activeThumbColor: primaryColor,
-      onChanged: onPrettyModeChanged,
     );
   }
 
