@@ -5,17 +5,15 @@ import 'package:intl/intl.dart';
 import '../core/app_colors.dart';
 import '../models/article.dart';
 import '../widgets/article_tile.dart';
+import '../widgets/story_bar.dart'; // Added Import
 
-/// ===========================================================================
-/// DASHBOARD CONTENT VIEW
-/// Manages the primary display areas: Feed, Video Placeholder, and Loaders.
-/// ===========================================================================
 class DashboardContentView extends StatelessWidget {
   final int tabIndex;
   final bool isLoading;
   final double width;
   final Color primaryColor;
   final List<Article> displayList;
+  final List<Article> allArticles; // Added Field
   final int visibleCount;
   final ScrollController scrollController;
   final int totalSources;
@@ -30,6 +28,7 @@ class DashboardContentView extends StatelessWidget {
     required this.width,
     required this.primaryColor,
     required this.displayList,
+    required this.allArticles, // Added to Constructor
     required this.visibleCount,
     required this.scrollController,
     required this.totalSources,
@@ -51,16 +50,19 @@ class DashboardContentView extends StatelessWidget {
     );
   }
 
-  /// ===========================================================================
-  /// CONTENT: MAIN SCROLL AREA
-  /// The grid/list layout for articles.
-  /// ===========================================================================
   Widget _mainScrollArea() {
     const double articleGap = 30.0;
     return ListView(
       controller: scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
+        // Story Bar Injection
+        if (tabIndex == 0)
+          StoryBar(
+            allArticles: allArticles,
+            primaryColor: primaryColor,
+          ),
+          
         Center(
           child: Container(
             constraints: const BoxConstraints(maxWidth: 1754),
@@ -106,7 +108,7 @@ class DashboardContentView extends StatelessWidget {
 
   Widget _sectionHeader() {
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -206,10 +208,6 @@ class DashboardContentView extends StatelessWidget {
 
   Widget _emptyState() => const Center(child: Text("NO SIGNALS FOUND"));
 
-  /// ===========================================================================
-  /// OVERLAY: NEW SIGNAL PROMPT
-  /// Floating button to indicate new background arrivals.
-  /// ===========================================================================
   static Widget newSignalPrompt({
     required Color primaryColor,
     required int incomingCount,

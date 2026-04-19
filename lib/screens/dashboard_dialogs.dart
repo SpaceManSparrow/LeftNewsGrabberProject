@@ -11,113 +11,153 @@ import '../core/app_config.dart';
 class DashboardDialogs {
   /// ===========================================================================
   /// DIALOG: SOURCES
-  /// Lists all active RSS feeds currently being polled.
+  /// Polished implementation for manually enabling/disabling sources.
   /// ===========================================================================
-  static void showSourcesDialog(
-    BuildContext context,
-    Color primaryColor,
-    bool extendedMode,
-  ) {
-    final allSources = Map.from(AppConfig.coreSources)
-    ..addAll(AppConfig.globalSources);
-    if (extendedMode) allSources.addAll(AppConfig.extendedSources);
-    final sortedNames = allSources.values.toList()..sort();
+  static void showSourcesDialog({
+    required BuildContext context,
+    required Color primaryColor,
+    required bool extendedMode,
+    required bool allSourcesEnabled,
+    required Set<String> enabledSources,
+    required Function(bool, Set<String>) onSaved,
+  }) {
+    // Collect and sort all relevant names from config
+    final List<String> allSourceNames = {
+      ...AppConfig.coreSources.values,
+      ...AppConfig.globalSources.values,
+      if (extendedMode) ...AppConfig.extendedSources.values,
+    }.toList(); 
+    allSourceNames.sort();
+
+    // Copy initial state to local variables for modal editing
+    bool localAllEnabled = allSourcesEnabled;
+    Set<String> localEnabledSet = {...enabledSources};
 
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: AppColors.appSurface,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 600),
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.borderSubtle),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Dialog(
+            backgroundColor: AppColors.appSurface,
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.borderSubtle),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    "ACTIVE SIGNALS",
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 4,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "SIGNAL SOURCES",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900, // Fixed: FontWeight.black is not a valid constant
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: const Icon(FontAwesomeIcons.xmark, size: 18),
+                      )
+                    ],
+                  ),
+                  const Divider(color: AppColors.borderSubtle, height: 40),
+
+                  // --- MASTER TOGGLE ---
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeThumbColor: primaryColor, // Fixed: activeColor is deprecated in SwitchListTile
+                    title: const Text(
+                      "ALL SOURCES",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    subtitle: const Text(
+                      "Include all signals automatically.",
+                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    ),
+                    value: localAllEnabled,
+                    onChanged: (val) {
+                      setModalState(() => localAllEnabled = val);
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // --- INDIVIDUAL SOURCE SELECTION ---
+                  Expanded(
+                    child: Opacity(
+                      opacity: localAllEnabled ? 0.4 : 1.0,
+                      child: AbsorbPointer(
+                        absorbing: localAllEnabled,
+                        child: ListView.builder(
+                          itemCount: allSourceNames.length,
+                          itemBuilder: (context, index) {
+                            final name = allSourceNames[index];
+                            final isChecked = localEnabledSet.contains(name);
+
+                            return CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              activeColor: primaryColor,
+                              checkColor: Colors.black,
+                              dense: true,
+                              title: Text(
+                                name,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              value: localAllEnabled || isChecked,
+                              onChanged: (val) {
+                                setModalState(() {
+                                  if (val == true) {
+                                    localEnabledSet.add(name);
+                                  } else {
+                                    localEnabledSet.remove(name);
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(FontAwesomeIcons.xmark, size: 18),
+
+                  const SizedBox(height: 30),
+
+                  // --- SAVE ACTION ---
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        onSaved(localAllEnabled, localEnabledSet);
+                        Navigator.pop(dialogContext);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.black,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.zero,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                      ),
+                      child: const Text(
+                        "SAVE & REFRESH",
+                        style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: sortedNames.length,
-                  itemBuilder: (context, index) => Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: Colors.white10)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          sortedNames[index],
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textMain,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: Colors.greenAccent,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.greenAccent.withValues(alpha: 0.5),
-                                blurRadius: 4,
-                                spreadRadius: 1,
-                              )
-                            ],
-                          ),
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.black,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.zero,
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                  ),
-                  child: const Text(
-                    "CLOSE",
-                    style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -224,10 +264,10 @@ class DashboardDialogs {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.black,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero,
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 20),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 20),
                     ),
                     child: const Text(
                       "CLOSE",

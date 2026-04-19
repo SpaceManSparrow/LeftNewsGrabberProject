@@ -26,8 +26,6 @@ class _ArticleTileState extends State<ArticleTile> {
   @override
   void initState() {
     super.initState();
-    // Using a microtask or local check to ensure the state updates 
-    // are fresh for the specifically keyed widget.
     _finalThumbnail = widget.article.thumbnail;
     _processHeavyData();
   }
@@ -39,13 +37,11 @@ class _ArticleTileState extends State<ArticleTile> {
   }
 
   void _processHeavyData() async {
-    // 1. Check if color already exists
     if (widget.article.dominantColor != null) {
       if (mounted) setState(() => _extractedColor = widget.article.dominantColor);
       return;
     }
 
-    // 2. Fallback Scraper if thumbnail is missing
     if (_finalThumbnail == null || _finalThumbnail!.isEmpty) {
       final scraped = await FeedParser.scrapeUrlForImage(widget.article.link);
       if (mounted && scraped.isNotEmpty) {
@@ -53,7 +49,6 @@ class _ArticleTileState extends State<ArticleTile> {
       }
     }
 
-    // 3. Color Extraction
     final targetImage = _finalThumbnail ?? "";
     if (targetImage.isEmpty) return;
     try {
@@ -77,7 +72,6 @@ class _ArticleTileState extends State<ArticleTile> {
   Widget build(BuildContext context) {
     double width = MediaQuery.of(context).size.width;
     
-    // 1. Surgical Caption Trimming Logic
     const int charLimit = 85;
     String snippet = widget.article.description.trim();
     if (snippet.length > charLimit) snippet = snippet.substring(0, charLimit);
@@ -100,7 +94,6 @@ class _ArticleTileState extends State<ArticleTile> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Account Header
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
             child: Row(
@@ -134,8 +127,30 @@ class _ArticleTileState extends State<ArticleTile> {
                   ),
                   Positioned(bottom: 12, left: 0, right: 0, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(2, (index) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Icon(FontAwesomeIcons.circle, size: 6, color: _currentIndex == index ? Colors.white : Colors.white24))))),
                   if (width > 500) ...[
-                    if (_currentIndex == 1) Positioned(left: 10, top: 0, bottom: 0, child: Center(child: _miniArrow(FontAwesomeIcons.chevronLeft, () => _tileController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.ease)))),
-                    if (_currentIndex == 0) Positioned(right: 10, top: 0, bottom: 0, child: Center(child: _miniArrow(FontAwesomeIcons.chevronRight, () => _tileController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease)))),
+                    if (_currentIndex == 1) 
+                      Positioned(
+                        left: 10, top: 0, bottom: 0, 
+                        child: Center(
+                          child: _miniArrow(FontAwesomeIcons.chevronLeft, () {
+                            // FIX: Added .hasClients check
+                            if (_tileController.hasClients) {
+                              _tileController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
+                            }
+                          })
+                        )
+                      ),
+                    if (_currentIndex == 0) 
+                      Positioned(
+                        right: 10, top: 0, bottom: 0, 
+                        child: Center(
+                          child: _miniArrow(FontAwesomeIcons.chevronRight, () {
+                            // FIX: Added .hasClients check
+                            if (_tileController.hasClients) {
+                              _tileController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
+                            }
+                          })
+                        )
+                      ),
                   ]
                 ],
               ),
@@ -158,7 +173,6 @@ class _ArticleTileState extends State<ArticleTile> {
               Positioned.fill(child: Image.network(_finalThumbnail!, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
             Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
             
-            // Topics
             Positioned(
               top: 12, left: 12, 
               child: Column(
@@ -167,7 +181,6 @@ class _ArticleTileState extends State<ArticleTile> {
               ),
             ),
 
-            // Source name bar
             Positioned(
               top: 12, right: 0,
               child: Container(

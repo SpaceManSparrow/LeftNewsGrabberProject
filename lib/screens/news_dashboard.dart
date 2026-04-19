@@ -56,6 +56,10 @@ class _NewsDashboardState extends State<NewsDashboard> {
   bool _hasNewSignals = false;
   String _activeFilter = "ALL";
 
+  // Source Filtering State
+  bool _allSourcesEnabled = true;
+  Set<String> _enabledSources = {};
+
   // Progress tracking for the sync sequence
   int _totalSources = 0;
   int _completedSources = 0;
@@ -75,19 +79,24 @@ class _NewsDashboardState extends State<NewsDashboard> {
     super.dispose();
   }
 
+  /// Helper to normalize URLs for reliable comparison
+  String _normalizeUrl(String url) {
+    return url.trim().toLowerCase().replaceAll(RegExp(r'/$'), '');
+  }
+
   /// ===========================================================================
   /// LOGIC: SCROLL LISTENER
   /// Triggers pagination (lazy loading) when user nears the bottom.
   /// ===========================================================================
   void _scrollListener() {
     if (_scrollController.position.pixels >=
-      _scrollController.position.maxScrollExtent - 400) {
+        _scrollController.position.maxScrollExtent - 400) {
       if (_visibleCount < _displayList.length) {
         setState(() {
           _visibleCount += 12;
         });
       }
-      }
+    }
   }
 
   /// ===========================================================================
@@ -99,6 +108,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
       final prefs = await SharedPreferences.getInstance();
       _extendedMode = prefs.getBool('extended_coverage') ?? false;
       _prettyMode = prefs.getBool('pretty_mode') ?? false;
+
+      // Load Source Filtering Preferences
+      _allSourcesEnabled = prefs.getBool('all_sources_enabled') ?? true;
+      final List<String>? savedSources = prefs.getStringList('enabled_sources');
+      if (savedSources != null) {
+        _enabledSources = savedSources.toSet();
+      } else {
+        _enabledSources = {
+          ...AppConfig.coreSources.values,
+          ...AppConfig.globalSources.values
+        };
+      }
 
       final String? cachedJson = prefs.getString('offline_cache');
       if (cachedJson != null) {
@@ -122,82 +143,113 @@ class _NewsDashboardState extends State<NewsDashboard> {
   Future<void> _fetchNews({bool isBackground = false}) async {
     if (!mounted) return;
     if (!isBackground) {
-      setState(() {
-        _isLoading = true;
-      });
+      setState(() => _isLoading = true);
     }
 
-    final sources = Map.from(AppConfig.coreSources)
-    ..addAll(AppConfig.globalSources);
+    final Map<String, String> sources = Map.from(AppConfig.coreSources)
+      ..addAll(AppConfig.globalSources);
     if (_extendedMode) sources.addAll(AppConfig.extendedSources);
+
+    if (!_allSourcesEnabled) {
+      sources.removeWhere((url, name) => !_enabledSources.contains(name));
+    }
 
     _totalSources = sources.length;
     _completedSources = 0;
+
+    // Sets of normalized links to detect duplicates across screens and background buffers
+    final Set<String> existingLinks = _allArticles.map((a) => _normalizeUrl(a.link)).toSet();
+    final Set<String> incomingLinks = _incomingArticles.map((a) => _normalizeUrl(a.link)).toSet();
+    
     List<Article> freshBatch = [];
-    Set<String> currentLinks = _allArticles.map((a) => a.link).toSet();
+    final Set<String> seenInThisSession = {};
 
     for (var entry in sources.entries) {
       if (!mounted) break;
       if (!isBackground) {
-        setState(() {
-          _statusMessage = "Receiving: ${entry.value}";
-        });
+        setState(() => _statusMessage = "Receiving: ${entry.value}");
       }
 
       try {
-        String finalUrl = kIsWeb
-        ? 'https://corsproxy.io/?${Uri.encodeComponent(entry.key)}'
-        : entry.key;
+        final parsedArticles = await _fetchAndParseFeed(entry.key, entry.value);
 
-        final response = await http
-        .get(Uri.parse(finalUrl))
-        .timeout(const Duration(seconds: 10));
+        for (var article in parsedArticles) {
+          final normalized = _normalizeUrl(article.link);
+          
+          if (article.link.isEmpty || seenInThisSession.contains(normalized)) {
+            continue;
+          }
+          seenInThisSession.add(normalized);
 
-        if (response.statusCode == 200) {
-          String rawXml = utf8.decode(
-            response.bodyBytes,
-            allowMalformed: true,
-          );
-          final parsed = FeedParser.parse(rawXml, entry.value);
-
-          for (var article in parsed) {
-            if (article.link.isEmpty) continue;
-            if (!currentLinks.contains(article.link)) {
-              freshBatch.add(article);
-              currentLinks.add(article.link);
+          // If background, only count it as new if it isn't in the main feed OR already in the incoming list
+          if (isBackground) {
+            if (existingLinks.contains(normalized) || incomingLinks.contains(normalized)) {
+              continue;
             }
           }
+
+          freshBatch.add(article);
         }
       } catch (e) {
-        debugPrint("Fetch Error: $e");
+        debugPrint("Error processing source ${entry.value}: $e");
       } finally {
-        if (mounted) {
-          setState(() {
-            _completedSources++;
-          });
-        }
+        if (mounted) setState(() => _completedSources++);
       }
     }
 
     if (mounted) {
       if (isBackground) {
         if (freshBatch.isNotEmpty) {
-          freshBatch.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
           setState(() {
-            _incomingArticles = freshBatch;
+            _incomingArticles = [...freshBatch, ..._incomingArticles]
+              ..sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
             _hasNewSignals = true;
           });
         }
       } else {
-        freshBatch.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
-        setState(() {
-          _allArticles = freshBatch;
-          _isLoading = false;
-          _applyLogic();
-        });
-        _saveToCache();
+        _processFetchedArticles(freshBatch);
       }
     }
+  }
+
+  /// Helper to fetch and parse a single RSS feed
+  Future<List<Article>> _fetchAndParseFeed(
+      String url, String sourceName) async {
+    final String finalUrl = kIsWeb
+        ? 'https://corsproxy.io/?${Uri.encodeComponent(url)}'
+        : url;
+
+    final response = await http
+        .get(Uri.parse(finalUrl))
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) return [];
+
+    final String rawXml = utf8.decode(response.bodyBytes, allowMalformed: true);
+    return FeedParser.parse(rawXml, sourceName);
+  }
+
+  /// Updates the main article list with newly fetched articles for foreground fetch
+  void _processFetchedArticles(List<Article> freshBatch) {
+    setState(() {
+      final Map<String, Article> deduplicated = {};
+      
+      // Merge existing articles using normalized keys
+      for (var a in _allArticles) {
+        deduplicated[_normalizeUrl(a.link)] = a;
+      }
+      // Overwrite or add fresh articles
+      for (var a in freshBatch) {
+        deduplicated[_normalizeUrl(a.link)] = a;
+      }
+
+      _allArticles = deduplicated.values.toList()
+        ..sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+
+      _isLoading = false;
+      _applyLogic();
+    });
+    _saveToCache();
   }
 
   Future<void> _saveToCache() async {
@@ -212,8 +264,18 @@ class _NewsDashboardState extends State<NewsDashboard> {
 
   void _mergeNewSignals() {
     setState(() {
-      _allArticles = [..._incomingArticles, ..._allArticles];
+      // Create a map to ensure absolute deduplication during merge
+      final Map<String, Article> deduplicated = {};
+      for (var a in _allArticles) {
+        deduplicated[_normalizeUrl(a.link)] = a;
+      }
+      for (var a in _incomingArticles) {
+        deduplicated[_normalizeUrl(a.link)] = a;
+      }
+
+      _allArticles = deduplicated.values.toList();
       _allArticles.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+      
       _incomingArticles = [];
       _hasNewSignals = false;
       _applyLogic();
@@ -243,18 +305,14 @@ class _NewsDashboardState extends State<NewsDashboard> {
   void _handleSearch(String q) {
     setState(() {
       _displayList = _allArticles
-      .where((a) =>
-      a.title.toLowerCase().contains(q.toLowerCase()) ||
-      a.source.toLowerCase().contains(q.toLowerCase()))
-      .toList();
+          .where((a) =>
+              a.title.toLowerCase().contains(q.toLowerCase()) ||
+              a.source.toLowerCase().contains(q.toLowerCase()))
+          .toList();
       _visibleCount = 12;
     });
   }
 
-  /// ===========================================================================
-  /// UI: MAIN BUILDER
-  /// The structural assembly of the dashboard.
-  /// ===========================================================================
   @override
   Widget build(BuildContext context) {
     double width = MediaQuery.of(context).size.width;
@@ -287,9 +345,21 @@ class _NewsDashboardState extends State<NewsDashboard> {
         onShowSources: () {
           Navigator.pop(context);
           DashboardDialogs.showSourcesDialog(
-            context,
-            widget.primaryColor,
-            _extendedMode,
+            context: context,
+            primaryColor: widget.primaryColor,
+            extendedMode: _extendedMode,
+            allSourcesEnabled: _allSourcesEnabled,
+            enabledSources: _enabledSources,
+            onSaved: (allEnabled, sourceSet) async {
+              setState(() {
+                _allSourcesEnabled = allEnabled;
+                _enabledSources = sourceSet;
+              });
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('all_sources_enabled', allEnabled);
+              await prefs.setStringList('enabled_sources', sourceSet.toList());
+              _fetchNews(isBackground: false);
+            },
           );
         },
         onShowAbout: () {
@@ -314,7 +384,8 @@ class _NewsDashboardState extends State<NewsDashboard> {
                   setState(() => _activeFilter = "ALL");
                   _applyLogic();
                 },
-                onOpenSettings: () => _scaffoldKey.currentState?.openEndDrawer(),
+                onOpenSettings: () =>
+                    _scaffoldKey.currentState?.openEndDrawer(),
               ),
               Expanded(
                 child: DashboardContentView(
@@ -323,6 +394,7 @@ class _NewsDashboardState extends State<NewsDashboard> {
                   width: width,
                   primaryColor: widget.primaryColor,
                   displayList: _displayList,
+                  allArticles: _allArticles, // <-- PASSED FULL ARTICLE LIST
                   visibleCount: _visibleCount,
                   scrollController: _scrollController,
                   totalSources: _totalSources,
@@ -355,7 +427,16 @@ class _NewsDashboardState extends State<NewsDashboard> {
       ),
       child: BottomNavigationBar(
         currentIndex: _tabIndex,
-        onTap: (i) => setState(() => _tabIndex = i),
+        onTap: (i) {
+          setState(() => _tabIndex = i);
+          if (i == 0 && _scrollController.hasClients) {
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeOut,
+            );
+          }
+        },
         backgroundColor: AppColors.appBackground,
         selectedItemColor: widget.primaryColor,
         unselectedItemColor: Colors.white24,
