@@ -25,7 +25,9 @@ class AppConfig {
     "https://www.redblacknotes.com/feed/rss": "RED AND BLACK NOTES",
     "https://cpa.org.au/feed/?post_type=guardian": "THE GUARDIAN (CPA)",
     "https://arena.org.au/feed": "ARENA",
-    "https://communist.org.au/feed": "THE COMMUNIST"
+    "https://communist.org.au/feed": "THE COMMUNIST",
+    "https://www.auscp.org.au/militant-worker/rss.xml": "MILITANT WORKER",
+    "https://koorimail.com/feed": "KOORI MAIL"
   };
 
   static const Map<String, String> globalSources = {
