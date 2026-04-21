@@ -218,7 +218,7 @@ class DashboardDialogs {
                           ),
                         ),
                         const Text(
-                          "v0.1.6",
+                          "v0.2.0",
                           style: TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 12,

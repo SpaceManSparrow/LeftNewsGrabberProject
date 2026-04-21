@@ -3,9 +3,11 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:palette_generator/palette_generator.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/article.dart';
 import '../core/app_colors.dart';
 import '../core/app_utils.dart';
+import '../core/app_cache_manager.dart';
 import '../services/feed_parser.dart';
 
 class ArticleTile extends StatefulWidget {
@@ -30,43 +32,55 @@ class _ArticleTileState extends State<ArticleTile> {
     _processHeavyData();
   }
 
+  void _processHeavyData() async {
+    if (_finalThumbnail == null || _finalThumbnail!.isEmpty) {
+      final scraped = await FeedParser.scrapeUrlForImage(widget.article.link);
+      if (mounted && scraped.isNotEmpty) {
+        setState(() => _finalThumbnail = FeedParser.wrapProxy(scraped));
+      }
+    }
+
+    final targetImage = _finalThumbnail ?? "";
+    if (targetImage.isEmpty) return;
+    
+    try {
+      final pg = await PaletteGenerator.fromImageProvider(
+        CachedNetworkImageProvider(targetImage, cacheManager: AppCacheManager.instance)
+      );
+      if (mounted) setState(() => _extractedColor = pg.vibrantColor?.color ?? pg.dominantColor?.color);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _tileController.dispose();
     super.dispose();
   }
 
-  void _processHeavyData() async {
-    if (widget.article.dominantColor != null) {
-      if (mounted) setState(() => _extractedColor = widget.article.dominantColor);
-      return;
-    }
-    if (_finalThumbnail == null || _finalThumbnail!.isEmpty) {
-      final scraped = await FeedParser.scrapeUrlForImage(widget.article.link);
-      if (mounted && scraped.isNotEmpty) setState(() => _finalThumbnail = FeedParser.wrapProxy(scraped));
-    }
-    final targetImage = _finalThumbnail ?? "";
-    if (targetImage.isEmpty) return;
-    try {
-      final pg = await PaletteGenerator.fromImageProvider(NetworkImage(targetImage));
-      if (mounted) setState(() => _extractedColor = pg.vibrantColor?.color ?? pg.dominantColor?.color);
-    } catch (_) {}
-  }
-
+  // RESTORED: Helper for desktop navigation arrows
   Widget _miniArrow(IconData i, VoidCallback o) {
-    return GestureDetector(onTap: o, child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle, border: Border.all(color: Colors.white10)), child: Icon(i, size: 10, color: Colors.white)));
+    return GestureDetector(
+      onTap: o, 
+      child: Container(
+        padding: const EdgeInsets.all(6), 
+        decoration: BoxDecoration(
+          color: Colors.black54, 
+          shape: BoxShape.circle, 
+          border: Border.all(color: Colors.white10)
+        ), 
+        child: Icon(i, size: 10, color: Colors.white)
+      )
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // RESTORED: Width check for desktop mode
     double width = MediaQuery.of(context).size.width;
+    
     const int charLimit = 85;
     String snippet = widget.article.description.trim();
     if (snippet.length > charLimit) snippet = snippet.substring(0, charLimit);
-    snippet = snippet.trimRight();
-
-    String fullDesc = widget.article.description;
-    if (fullDesc.length > 250) fullDesc = "${fullDesc.substring(0, 250)}...";
 
     return Container(
       width: 400, height: 610, color: Colors.transparent,
@@ -90,12 +104,34 @@ class _ArticleTileState extends State<ArticleTile> {
                   PageView(
                     controller: _tileController,
                     onPageChanged: (i) => setState(() => _currentIndex = i),
-                    children: [_buildMainSlide(), _buildInfoSlide(fullDesc)],
+                    children: [_buildMainSlide(), _buildInfoSlide(widget.article.description)],
                   ),
                   Positioned(bottom: 12, left: 0, right: 0, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(2, (index) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Icon(FontAwesomeIcons.circle, size: 6, color: _currentIndex == index ? Colors.white : Colors.white24))))),
+                  
+                  // RESTORED: Desktop Navigation Arrows
                   if (width > 500) ...[
-                    if (_currentIndex == 1) Positioned(left: 10, top: 0, bottom: 0, child: Center(child: _miniArrow(FontAwesomeIcons.chevronLeft, () { if (_tileController.hasClients) _tileController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.ease); }))),
-                    if (_currentIndex == 0) Positioned(right: 10, top: 0, bottom: 0, child: Center(child: _miniArrow(FontAwesomeIcons.chevronRight, () { if (_tileController.hasClients) _tileController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease); }))),
+                    if (_currentIndex == 1) 
+                      Positioned(
+                        left: 10, top: 0, bottom: 0, 
+                        child: Center(
+                          child: _miniArrow(FontAwesomeIcons.chevronLeft, () {
+                            if (_tileController.hasClients) {
+                              _tileController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
+                            }
+                          })
+                        )
+                      ),
+                    if (_currentIndex == 0) 
+                      Positioned(
+                        right: 10, top: 0, bottom: 0, 
+                        child: Center(
+                          child: _miniArrow(FontAwesomeIcons.chevronRight, () {
+                            if (_tileController.hasClients) {
+                              _tileController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.ease);
+                            }
+                          })
+                        )
+                      ),
                   ]
                 ],
               ),
@@ -111,15 +147,22 @@ class _ArticleTileState extends State<ArticleTile> {
     return InkWell(
       onTap: () => launchUrl(Uri.parse(widget.article.link)),
       child: Container(
-        decoration: BoxDecoration(color: AppColors.tileBackground, border: Border.all(color: AppColors.appBackground), borderRadius: BorderRadius.circular(28)),
+        decoration: BoxDecoration(color: AppColors.tileBackground, borderRadius: BorderRadius.circular(28)),
         child: Stack(
           children: [
-            if (_finalThumbnail != null && _finalThumbnail!.isNotEmpty) Positioned.fill(child: Image.network(_finalThumbnail!, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)))),
+            if (_finalThumbnail != null && _finalThumbnail!.isNotEmpty)
+              Positioned.fill(
+                child: CachedNetworkImage(
+                  imageUrl: _finalThumbnail!,
+                  cacheManager: AppCacheManager.instance,
+                  fit: BoxFit.cover,
+                  errorWidget: (context, url, error) => const Center(child: Icon(FontAwesomeIcons.satelliteDish, color: Colors.white10)),
+                ),
+              ),
             Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87])))),
             Positioned(top: 12, left: 12, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: widget.article.topics.map((t) => Padding(padding: const EdgeInsets.only(bottom: 4), child: badge(t, Colors.white, Colors.black))).toList())),
             Positioned(top: 12, right: 0, child: Container(padding: const EdgeInsets.fromLTRB(12, 6, 16, 6), decoration: BoxDecoration(color: widget.primaryColor, borderRadius: const BorderRadius.only(topLeft: Radius.circular(8), bottomLeft: Radius.circular(8))), child: Text(widget.article.source.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.2)))),
             Positioned(bottom: 24, left: 16, right: 40, child: Text(widget.article.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, fontStyle: FontStyle.italic))),
-            Positioned(bottom: 24, right: 16, child: Icon(FontAwesomeIcons.arrowUpRightFromSquare, color: Colors.white.withValues(alpha: 0.6), size: 14)),
           ],
         ),
       ),
@@ -129,7 +172,7 @@ class _ArticleTileState extends State<ArticleTile> {
   Widget _buildInfoSlide(String fullDesc) {
     return Container(
       padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(color: Color.lerp(_extractedColor, Colors.black, 0.6)?.withValues(alpha: 0.95) ?? AppColors.tileBackground, borderRadius: BorderRadius.circular(28), border: Border.all(color: AppColors.appBackground)),
+      decoration: BoxDecoration(color: Color.lerp(_extractedColor, Colors.black, 0.6)?.withValues(alpha: 0.95) ?? AppColors.tileBackground, borderRadius: BorderRadius.circular(28)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

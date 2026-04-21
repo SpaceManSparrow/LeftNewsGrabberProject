@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
+import 'package:html/parser.dart' show parseFragment; 
 import '../models/article.dart';
 import '../core/app_config.dart';
 
@@ -81,9 +82,35 @@ class FeedParser {
     } catch (_) { return DateTime.now(); }
   }
 
-  static String cleanHtml(String h) {
-    if (h.isEmpty) return "";
-    return h.replaceAll(RegExp(r'<!\[CDATA\[|\]\]>'), '').replaceAll(RegExp(r'<[^>]*>', dotAll: true), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+  /// AGGRESSIVE RECURSIVE CLEANER
+  static String cleanHtml(String input) {
+    if (input.isEmpty) return "";
+
+    // 1. Pre-emptive strike on specific broken patterns
+    String result = input
+        .replaceAll(RegExp(r'<!\[CDATA\[|\]\]>'), '')
+        .replaceAll('amp;nbsp', ' ')
+        .replaceAll('&nbsp;', ' ');
+
+    // 2. Recursive Decoding
+    // Some feeds encode things 2 or 3 times. We keep decoding until 
+    // the string stops changing or no entities remain.
+    String previous;
+    int limit = 0;
+    do {
+      previous = result;
+      result = parseFragment(result).text ?? "";
+      limit++;
+    } while (result != previous && limit < 3);
+
+    // 3. Final Regular Expression sweep
+    // This removes literal strings like "<p>" if they survived as text
+    result = result
+        .replaceAll(RegExp(r'<[^>]*>', dotAll: true), '') 
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return result;
   }
 
   static String scrapeImage(String h) => RegExp(r"""<img[^>]+src=["']([^"']+)["']""", caseSensitive: false).firstMatch(h)?.group(1) ?? '';

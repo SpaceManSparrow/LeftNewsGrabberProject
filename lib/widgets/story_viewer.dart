@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/article.dart';
 import '../core/app_colors.dart';
 import '../core/app_utils.dart';
+import '../core/app_cache_manager.dart';
+import '../services/feed_parser.dart';
 
 class StoryViewer extends StatefulWidget {
   final List<Article> articles;
@@ -25,6 +28,7 @@ class _StoryViewerState extends State<StoryViewer> with SingleTickerProviderStat
   late PageController _pageController;
   late AnimationController _animController;
   late int _currentIndex;
+  final Map<int, String> _resolvedThumbnails = {};
 
   @override
   void initState() {
@@ -33,19 +37,36 @@ class _StoryViewerState extends State<StoryViewer> with SingleTickerProviderStat
     _pageController = PageController(initialPage: _currentIndex);
     _animController = AnimationController(vsync: this);
 
+    _resolveThumbnail(_currentIndex);
+
     WidgetsBinding.instance.addPostFrameCallback((_) => _startStory());
 
     _animController.addStatusListener((status) {
-      if (status == AnimationStatus.completed) _nextStory();
+      if (status == AnimationStatus.completed) {
+        _nextStory();
+      }
     });
   }
 
-  void _startStory() {
-    if (!mounted) return;
+  void _resolveThumbnail(int index) async {
+    final article = widget.articles[index];
+    if (article.thumbnail.isNotEmpty) {
+      return;
+    }
     
-    // Mark as viewed immediately upon slide entry
-    widget.onStoryViewed(widget.articles[_currentIndex].link);
+    final scraped = await FeedParser.scrapeUrlForImage(article.link);
+    if (mounted && scraped.isNotEmpty) {
+      setState(() {
+        _resolvedThumbnails[index] = FeedParser.wrapProxy(scraped);
+      });
+    }
+  }
 
+  void _startStory() {
+    if (!mounted) {
+      return;
+    }
+    widget.onStoryViewed(widget.articles[_currentIndex].link);
     _animController.stop();
     _animController.reset();
     _animController.duration = const Duration(seconds: 10);
@@ -54,8 +75,13 @@ class _StoryViewerState extends State<StoryViewer> with SingleTickerProviderStat
 
   void _nextStory() {
     if (_currentIndex + 1 < widget.articles.length) {
-      setState(() => _currentIndex++);
-      _safeMovePage();
+      setState(() {
+        _currentIndex++;
+      });
+      _resolveThumbnail(_currentIndex);
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(_currentIndex);
+      }
       _startStory();
     } else {
       Navigator.pop(context);
@@ -64,14 +90,14 @@ class _StoryViewerState extends State<StoryViewer> with SingleTickerProviderStat
 
   void _prevStory() {
     if (_currentIndex > 0) {
-      setState(() => _currentIndex--);
-      _safeMovePage();
+      setState(() {
+        _currentIndex--;
+      });
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(_currentIndex);
+      }
       _startStory();
     }
-  }
-
-  void _safeMovePage() {
-    if (_pageController.hasClients) _pageController.jumpToPage(_currentIndex);
   }
 
   @override
@@ -84,14 +110,19 @@ class _StoryViewerState extends State<StoryViewer> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final article = widget.articles[_currentIndex];
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
         onTapDown: (details) {
           final double width = MediaQuery.of(context).size.width;
-          if (details.globalPosition.dx < width / 3) _prevStory();
-          else if (details.globalPosition.dx > 2 * width / 3) _nextStory();
-          else launchUrl(Uri.parse(article.link));
+          if (details.globalPosition.dx < width / 3) {
+            _prevStory();
+          } else if (details.globalPosition.dx > 2 * width / 3) {
+            _nextStory();
+          } else {
+            launchUrl(Uri.parse(article.link));
+          }
         },
         child: Stack(
           children: [
@@ -102,7 +133,19 @@ class _StoryViewerState extends State<StoryViewer> with SingleTickerProviderStat
                 itemCount: widget.articles.length,
                 itemBuilder: (context, index) {
                   final a = widget.articles[index];
-                  return a.thumbnail.isNotEmpty ? Image.network(a.thumbnail, fit: BoxFit.cover) : Container(color: AppColors.appSurface);
+                  final String img = _resolvedThumbnails[index] ?? a.thumbnail;
+                  
+                  if (img.isEmpty) {
+                    return Container(color: AppColors.appSurface);
+                  }
+                  
+                  return CachedNetworkImage(
+                    imageUrl: img,
+                    cacheManager: AppCacheManager.instance,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(color: AppColors.appSurface),
+                    errorWidget: (context, url, error) => Container(color: AppColors.appSurface),
+                  );
                 },
               ),
             ),

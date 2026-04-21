@@ -55,7 +55,6 @@ class _NewsDashboardState extends State<NewsDashboard> {
       _hideTheory = prefs.getBool('hide_theory') ?? true;
       _allSourcesEnabled = prefs.getBool('all_sources_enabled') ?? true;
       
-      // Load and Clean Viewed Stories
       final String? viewedJson = prefs.getString('viewed_stories_v1');
       if (viewedJson != null) {
         _viewedStoryMap = Map<String, String>.from(jsonDecode(viewedJson));
@@ -63,12 +62,24 @@ class _NewsDashboardState extends State<NewsDashboard> {
       }
 
       final List<String>? savedSources = prefs.getStringList('enabled_sources');
-      if (savedSources != null) _enabledSources = savedSources.toSet();
+      if (savedSources != null) {
+        _enabledSources = savedSources.toSet();
+      } else {
+        // Default to all core + global if no prefs saved
+        _enabledSources = {
+          ...AppConfig.coreSources.values,
+          ...AppConfig.globalSources.values
+        };
+      }
 
       final String? cachedJson = prefs.getString('offline_cache');
       if (cachedJson != null) {
         final List decoded = jsonDecode(cachedJson);
-        setState(() { _allArticles = decoded.map((m) => Article.fromMap(m)).toList(); _isLoading = false; _applyLogic(); });
+        setState(() { 
+          _allArticles = decoded.map((m) => Article.fromMap(m)).toList(); 
+          _isLoading = false; 
+          _applyLogic(); 
+        });
       }
     } catch (_) {}
     _fetchNews(isBackground: _allArticles.isNotEmpty);
@@ -104,9 +115,15 @@ class _NewsDashboardState extends State<NewsDashboard> {
     if (!mounted) return;
     if (!isBackground) setState(() => _isLoading = true);
 
+    // Determine current target sources
     final Map<String, String> sources = Map.from(AppConfig.coreSources)..addAll(AppConfig.globalSources);
     if (_extendedMode) sources.addAll(AppConfig.extendedSources);
-    if (!_allSourcesEnabled) sources.removeWhere((url, name) => !_enabledSources.contains(name));
+    
+    // Background fetch doesn't care about manual source toggles (it gets everything available)
+    // but foreground fetch respects the 'Signal Sources' dialog
+    if (!_allSourcesEnabled) {
+      sources.removeWhere((url, name) => !_enabledSources.contains(name));
+    }
 
     _totalSources = sources.length;
     _completedSources = 0;
@@ -117,8 +134,12 @@ class _NewsDashboardState extends State<NewsDashboard> {
       if (!isBackground) setState(() => _statusMessage = "Receiving: ${entry.value}");
       try {
         final response = await http.get(Uri.parse(kIsWeb ? 'https://corsproxy.io/?${Uri.encodeComponent(entry.key)}' : entry.key)).timeout(const Duration(seconds: 10));
-        if (response.statusCode == 200) freshBatch.addAll(FeedParser.parse(utf8.decode(response.bodyBytes, allowMalformed: true), entry.value));
-      } catch (_) {} finally { if (mounted) setState(() => _completedSources++); }
+        if (response.statusCode == 200) {
+          freshBatch.addAll(FeedParser.parse(utf8.decode(response.bodyBytes, allowMalformed: true), entry.value));
+        }
+      } catch (_) {} finally { 
+        if (mounted) setState(() => _completedSources++); 
+      }
     }
     if (mounted) _processFetchedArticles(freshBatch);
   }
@@ -135,11 +156,33 @@ class _NewsDashboardState extends State<NewsDashboard> {
     _saveToCache();
   }
 
+  /// THE FIX: Logic now filters the master list based on all active toggles
   void _applyLogic() {
     setState(() {
       Iterable<Article> filtered = _allArticles;
-      if (_activeFilter != "ALL") filtered = filtered.where((a) => a.topics.contains(_activeFilter));
-      if (_hideTheory) filtered = filtered.where((a) => !a.topics.contains("THEORY/REVIEW"));
+
+      // 1. Topic Filter (Sidebar)
+      if (_activeFilter != "ALL") {
+        filtered = filtered.where((a) => a.topics.contains(_activeFilter));
+      }
+
+      // 2. Theory Filter (Sidebar Toggle)
+      if (_hideTheory) {
+        filtered = filtered.where((a) => !a.topics.contains("THEORY/REVIEW"));
+      }
+
+      // 3. Extended Coverage Filter (The Fix)
+      // If extended mode is OFF, hide anything that belongs specifically to the extended list
+      if (!_extendedMode) {
+        final Set<String> extendedNames = AppConfig.extendedSources.values.toSet();
+        filtered = filtered.where((a) => !extendedNames.contains(a.source));
+      }
+
+      // 4. Manual Source Filter (Signal Sources Dialog)
+      if (!_allSourcesEnabled) {
+        filtered = filtered.where((a) => _enabledSources.contains(a.source));
+      }
+
       _displayList = filtered.toList();
       _visibleCount = 12;
     });
@@ -155,25 +198,104 @@ class _NewsDashboardState extends State<NewsDashboard> {
     return Scaffold(
       key: _scaffoldKey,
       endDrawer: DashboardDrawer(
-        primaryColor: widget.primaryColor, onThemeChanged: widget.onThemeChanged,
-        extendedMode: _extendedMode, onExtendedModeChanged: (v) async { final p = await SharedPreferences.getInstance(); p.setBool('extended_coverage', v); setState(() => _extendedMode = v); _fetchNews(); },
-        hideTheory: _hideTheory, onHideTheoryChanged: (v) async { final p = await SharedPreferences.getInstance(); p.setBool('hide_theory', v); setState(() => _hideTheory = v); _applyLogic(); },
-        activeFilter: _activeFilter, onFilterChanged: (n) { setState(() => _activeFilter = n); _applyLogic(); Navigator.pop(context); },
-        onShowSources: () { Navigator.pop(context); DashboardDialogs.showSourcesDialog(context: context, primaryColor: widget.primaryColor, extendedMode: _extendedMode, allSourcesEnabled: _allSourcesEnabled, enabledSources: _enabledSources, onSaved: (all, set) async { setState(() { _allSourcesEnabled = all; _enabledSources = set; }); final p = await SharedPreferences.getInstance(); p.setBool('all_sources_enabled', all); p.setStringList('enabled_sources', set.toList()); _fetchNews(); }); },
-        onShowAbout: () { Navigator.pop(context); DashboardDialogs.showAboutDialog(context, widget.primaryColor); },
+        primaryColor: widget.primaryColor, 
+        onThemeChanged: widget.onThemeChanged,
+        extendedMode: _extendedMode, 
+        onExtendedModeChanged: (v) async { 
+          final p = await SharedPreferences.getInstance(); 
+          p.setBool('extended_coverage', v); 
+          setState(() => _extendedMode = v); 
+          // Re-apply logic immediately to hide/show extended articles already in cache
+          _applyLogic();
+          // Then fetch to ensure we have the latest if turning ON
+          if (v) _fetchNews(); 
+        },
+        hideTheory: _hideTheory, 
+        onHideTheoryChanged: (v) async { 
+          final p = await SharedPreferences.getInstance(); 
+          p.setBool('hide_theory', v); 
+          setState(() => _hideTheory = v); 
+          _applyLogic(); 
+        },
+        activeFilter: _activeFilter, 
+        onFilterChanged: (n) { 
+          setState(() => _activeFilter = n); 
+          _applyLogic(); 
+          Navigator.pop(context); 
+        },
+        onShowSources: () { 
+          Navigator.pop(context); 
+          DashboardDialogs.showSourcesDialog(
+            context: context, 
+            primaryColor: widget.primaryColor, 
+            extendedMode: _extendedMode, 
+            allSourcesEnabled: _allSourcesEnabled, 
+            enabledSources: _enabledSources, 
+            onSaved: (all, set) async { 
+              setState(() { 
+                _allSourcesEnabled = all; 
+                _enabledSources = set; 
+              }); 
+              final p = await SharedPreferences.getInstance(); 
+              p.setBool('all_sources_enabled', all); 
+              p.setStringList('enabled_sources', set.toList()); 
+              _applyLogic();
+              _fetchNews(); 
+            }
+          ); 
+        },
+        onShowAbout: () { 
+          Navigator.pop(context); 
+          DashboardDialogs.showAboutDialog(context, widget.primaryColor); 
+        },
       ),
-      bottomNavigationBar: BottomNavigationBar(currentIndex: _tabIndex, onTap: (i) { setState(() => _tabIndex = i); if (i == 0) _scrollController.jumpTo(0); }, backgroundColor: AppColors.appBackground, selectedItemColor: widget.primaryColor, unselectedItemColor: Colors.white24, type: BottomNavigationBarType.fixed, items: const [BottomNavigationBarItem(icon: Icon(FontAwesomeIcons.house, size: 18), label: "Home"), BottomNavigationBarItem(icon: Icon(FontAwesomeIcons.play, size: 18), label: "Videos")]),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _tabIndex, 
+        onTap: (i) { 
+          setState(() => _tabIndex = i); 
+          if (i == 0) {
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(0, duration: const Duration(milliseconds: 500), curve: Curves.easeOut);
+            }
+          }
+        }, 
+        backgroundColor: AppColors.appBackground, 
+        selectedItemColor: widget.primaryColor, 
+        unselectedItemColor: Colors.white24, 
+        type: BottomNavigationBarType.fixed, 
+        items: const [
+          BottomNavigationBarItem(icon: Icon(FontAwesomeIcons.house, size: 18), label: "Home"), 
+          BottomNavigationBarItem(icon: Icon(FontAwesomeIcons.play, size: 18), label: "Videos")
+        ]
+      ),
       body: Column(children: [
-        DashboardHeader(width: MediaQuery.of(context).size.width, primaryColor: widget.primaryColor, searchController: _searchController, onSearchChanged: (q) { setState(() { _displayList = _allArticles.where((a) => a.title.toLowerCase().contains(q.toLowerCase())).toList(); _visibleCount = 12; }); }, onLogoTap: () { _activeFilter = "ALL"; _applyLogic(); }, onOpenSettings: () => _scaffoldKey.currentState?.openEndDrawer()),
+        DashboardHeader(
+          width: MediaQuery.of(context).size.width, 
+          primaryColor: widget.primaryColor, 
+          searchController: _searchController, 
+          onSearchChanged: (q) { 
+            setState(() { 
+              _displayList = _allArticles.where((a) => a.title.toLowerCase().contains(q.toLowerCase())).toList(); 
+              _visibleCount = 12; 
+            }); 
+          }, 
+          onLogoTap: () { 
+            setState(() {
+              _activeFilter = "ALL"; 
+              _applyLogic();
+            }); 
+          }, 
+          onOpenSettings: () => _scaffoldKey.currentState?.openEndDrawer()
+        ),
         Expanded(child: DashboardContentView(
           tabIndex: _tabIndex, 
           isLoading: _isLoading, 
           width: MediaQuery.of(context).size.width, 
           primaryColor: widget.primaryColor, 
           displayList: _displayList, 
-          allArticles: _allArticles, 
-          viewedStoryLinks: _viewedStoryMap.keys.toSet(), // NEW
-          onStoryViewed: _markStoryViewed, // NEW
+          allArticles: _displayList, // Changed to displayList to keep stories consistent with feed
+          viewedStoryLinks: _viewedStoryMap.keys.toSet(),
+          onStoryViewed: _markStoryViewed,
           visibleCount: _visibleCount, 
           scrollController: _scrollController, 
           totalSources: _totalSources, 

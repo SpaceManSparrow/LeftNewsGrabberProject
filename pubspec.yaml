@@ -15,7 +15,6 @@ dependencies:
   shared_preferences: ^2.2.2
 
   # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.6
 
   # Networking for fetching the RSS feeds
@@ -32,9 +31,17 @@ dependencies:
 
   # Date and time formatting
   intl: ^0.19.0
+
+  # HTML parsing and Web support
   web: ^1.1.1
   html: ^0.15.6
+
+  # Image Processing and Color Extraction
   palette_generator: ^0.3.3+7
+
+  # Persistent Image Caching and Storage Management (14-day logic)
+  cached_network_image: ^3.3.1
+  flutter_cache_manager: ^3.3.1
 
 dev_dependencies:
   flutter_test:
